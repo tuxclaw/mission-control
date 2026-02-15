@@ -1,0 +1,647 @@
+import express from 'express';
+import cors from 'cors';
+import { readFile, readdir } from 'node:fs/promises';
+import { exec } from 'node:child_process';
+import { promisify } from 'node:util';
+import { join } from 'node:path';
+
+const execAsync = promisify(exec);
+const WORKSPACE = process.env.OPENCLAW_WORKSPACE ?? '/home/tux/.openclaw/workspace';
+const REPO_ROOT = join(WORKSPACE, 'projects/mission-control');
+const app = express();
+const PORT = Number(process.env.VITALS_PORT ?? 3851);
+
+app.use(cors());
+app.use(express.json());
+
+// ---- Gateway proxy (avoids CORS) ----
+const GATEWAY_URL = process.env.VITE_GATEWAY_URL ?? 'http://localhost:18789';
+const GATEWAY_TOKEN = process.env.VITE_GATEWAY_TOKEN ?? '';
+
+function gatewayHeaders(extra?: Record<string, string>) {
+  return {
+    ...(extra ?? {}),
+    ...(GATEWAY_TOKEN ? { Authorization: `Bearer ${GATEWAY_TOKEN}` } : {}),
+  };
+}
+
+function extractModelName(model?: string): string {
+  if (!model) return 'unknown';
+  const trimmed = model.trim();
+  if (!trimmed) return 'unknown';
+  const parts = trimmed.split('/');
+  return parts[parts.length - 1] || trimmed;
+}
+
+function formatSessionAge(createdAt?: string): string | undefined {
+  if (!createdAt) return undefined;
+  const createdMs = new Date(createdAt).getTime();
+  if (Number.isNaN(createdMs)) return undefined;
+  const diffMs = Math.max(0, Date.now() - createdMs);
+  const mins = Math.floor(diffMs / 60000);
+  if (mins < 60) return `${mins}m`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ${mins % 60}m`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ${hours % 24}h`;
+}
+
+function sessionStatus(lastActivityAt?: string): 'active' | 'idle' | 'dormant' {
+  if (!lastActivityAt) return 'dormant';
+  const lastMs = new Date(lastActivityAt).getTime();
+  if (Number.isNaN(lastMs)) return 'dormant';
+  const diffMs = Math.max(0, Date.now() - lastMs);
+  if (diffMs < 5 * 60 * 1000) return 'active';
+  if (diffMs < 30 * 60 * 1000) return 'idle';
+  return 'dormant';
+}
+
+function sessionRole(kind?: string): string {
+  if (kind === 'main') return 'Main Agent';
+  if (kind === 'subagent') return 'Sub-Agent';
+  if (kind === 'cron') return 'Cron Job';
+  return kind ?? 'Agent';
+}
+
+function formatSessionName(key?: string): string {
+  if (!key) return 'Unknown';
+  const cleaned = key.replace(/[_-]+/g, ' ').trim();
+  return cleaned ? cleaned.replace(/\b\w/g, (c) => c.toUpperCase()) : key;
+}
+
+function formatExecError(err: unknown): string {
+  if (!err) return 'Unknown error';
+  const info = err as { message?: string; stdout?: string; stderr?: string };
+  return [info.message, info.stdout, info.stderr].filter(Boolean).join('\n').trim();
+}
+
+app.post('/api/chat', async (req, res) => {
+  try {
+    const { message } = req.body as { message?: string };
+    if (!message || typeof message !== 'string') {
+      res.status(400).json({ error: 'Missing message field' });
+      return;
+    }
+    const upstream = await fetch(`${GATEWAY_URL}/api/sessions/main/message`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(GATEWAY_TOKEN ? { Authorization: `Bearer ${GATEWAY_TOKEN}` } : {}),
+      },
+      body: JSON.stringify({ message }),
+    });
+    const body = await upstream.text();
+    res.status(upstream.status).type('application/json').send(body);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Proxy error';
+    res.status(502).json({ error: msg });
+  }
+});
+
+app.get('/api/sessions', async (_req, res) => {
+  try {
+    const upstream = await fetch(`${GATEWAY_URL}/api/agents/main/sessions`, {
+      headers: gatewayHeaders(),
+    });
+    if (!upstream.ok) {
+      res.status(upstream.status).json({ error: `Gateway HTTP ${upstream.status}` });
+      return;
+    }
+    const raw = await upstream.json() as unknown;
+    const sessions = Array.isArray(raw)
+      ? raw
+      : (raw as { sessions?: unknown[] }).sessions ?? [];
+
+    const agents = (sessions as Array<Record<string, unknown>>).map((session) => {
+      const sessionKey = typeof session.sessionKey === 'string' ? session.sessionKey : '';
+      const kind = typeof session.kind === 'string' ? session.kind : undefined;
+      const model = typeof session.model === 'string' ? session.model : undefined;
+      const createdAt = typeof session.createdAt === 'string' ? session.createdAt : undefined;
+      const lastActivityAt = typeof session.lastActivityAt === 'string' ? session.lastActivityAt : undefined;
+      const id = sessionKey || crypto.randomUUID();
+      return {
+        id,
+        name: formatSessionName(sessionKey || id),
+        model: extractModelName(model),
+        status: sessionStatus(lastActivityAt),
+        role: sessionRole(kind),
+        sessionAge: formatSessionAge(createdAt),
+      };
+    });
+
+    res.json(agents);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Proxy error';
+    res.status(502).json({ error: msg });
+  }
+});
+
+// ---- CPU usage from /proc/stat ----
+let prevIdle = 0;
+let prevTotal = 0;
+
+async function getCpuPercent(): Promise<number> {
+  try {
+    const stat = await readFile('/proc/stat', 'utf-8');
+    const line = stat.split('\n')[0]; // "cpu  user nice system idle ..."
+    if (!line) return 0;
+    const parts = line.split(/\s+/).slice(1).map(Number);
+    const idle = parts[3] ?? 0;
+    const total = parts.reduce((a, b) => a + b, 0);
+
+    const diffIdle = idle - prevIdle;
+    const diffTotal = total - prevTotal;
+    prevIdle = idle;
+    prevTotal = total;
+
+    if (diffTotal === 0) return 0;
+    return Math.round(((diffTotal - diffIdle) / diffTotal) * 100);
+  } catch {
+    return 0;
+  }
+}
+
+// ---- RAM from /proc/meminfo ----
+async function getRamPercent(): Promise<number> {
+  try {
+    const info = await readFile('/proc/meminfo', 'utf-8');
+    const get = (key: string): number => {
+      const match = info.match(new RegExp(`${key}:\\s+(\\d+)`));
+      return match ? Number(match[1]) : 0;
+    };
+    const total = get('MemTotal');
+    const available = get('MemAvailable');
+    if (total === 0) return 0;
+    return Math.round(((total - available) / total) * 100);
+  } catch {
+    return 0;
+  }
+}
+
+// ---- Disk from df ----
+async function getDiskPercent(): Promise<number> {
+  try {
+    const { stdout } = await execAsync('df -h /var/home 2>/dev/null || df -h / 2>/dev/null');
+    const lines = stdout.trim().split('\n');
+    if (lines.length < 2) return 0;
+    const parts = lines[1]!.split(/\s+/);
+    const useStr = parts[4]?.replace('%', '') ?? '0';
+    return Number(useStr);
+  } catch {
+    return 0;
+  }
+}
+
+// ---- GPU via Ollama ----
+async function getGpuPercent(): Promise<number> {
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 2000);
+    const res = await fetch('http://localhost:11434/api/ps', { signal: controller.signal });
+    clearTimeout(timeout);
+    if (!res.ok) return 0;
+    const data = await res.json() as { models?: Array<{ size_vram?: number; size?: number }> };
+    if (!data.models || data.models.length === 0) return 0;
+    // If models are loaded, estimate some usage
+    const model = data.models[0]!;
+    if (model.size_vram && model.size && model.size > 0) {
+      return Math.round((model.size_vram / model.size) * 100);
+    }
+    return data.models.length > 0 ? 15 : 0;
+  } catch {
+    return 0;
+  }
+}
+
+app.get('/api/vitals', async (_req, res) => {
+  try {
+    const [cpu, ram, disk, gpu] = await Promise.all([
+      getCpuPercent(),
+      getRamPercent(),
+      getDiskPercent(),
+      getGpuPercent(),
+    ]);
+    res.json({ cpu, ram, disk, gpu });
+  } catch {
+    res.status(500).json({ error: 'Failed to read vitals' });
+  }
+});
+
+// ---- Cron API (gateway proxy) ----
+app.get('/api/cron/jobs', async (_req, res) => {
+  try {
+    const upstream = await fetch(`${GATEWAY_URL}/api/cron/jobs`, {
+      headers: gatewayHeaders(),
+    });
+    const body = await upstream.text();
+    res.status(upstream.status).type(upstream.headers.get('content-type') ?? 'application/json').send(body);
+  } catch {
+    res.status(500).json({ error: 'Failed to list cron jobs' });
+  }
+});
+
+app.post('/api/cron/jobs/:id/run', async (req, res) => {
+  try {
+    const upstream = await fetch(`${GATEWAY_URL}/api/cron/jobs/${req.params.id}/run`, {
+      method: 'POST',
+      headers: gatewayHeaders({ 'Content-Type': 'application/json' }),
+    });
+    const body = await upstream.text();
+    res.status(upstream.status).type(upstream.headers.get('content-type') ?? 'application/json').send(body);
+  } catch {
+    res.status(500).json({ error: 'Failed to run job' });
+  }
+});
+
+app.patch('/api/cron/jobs/:id', async (req, res) => {
+  try {
+    const upstream = await fetch(`${GATEWAY_URL}/api/cron/jobs/${req.params.id}`, {
+      method: 'PATCH',
+      headers: gatewayHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify(req.body ?? {}),
+    });
+    const body = await upstream.text();
+    res.status(upstream.status).type(upstream.headers.get('content-type') ?? 'application/json').send(body);
+  } catch {
+    res.status(500).json({ error: 'Failed to update job' });
+  }
+});
+
+// ---- Memory API ----
+app.get('/api/memory', async (_req, res) => {
+  try {
+    const content = await readFile(join(WORKSPACE, 'MEMORY.md'), 'utf-8');
+    res.json({ content });
+  } catch {
+    res.json({ content: '' });
+  }
+});
+
+app.get('/api/memory/files', async (_req, res) => {
+  try {
+    const dir = join(WORKSPACE, 'memory');
+    const entries = await readdir(dir);
+    const files = entries.filter((f) => f.endsWith('.md')).sort().reverse();
+    res.json({ files });
+  } catch {
+    res.json({ files: [] });
+  }
+});
+
+app.get('/api/memory/:filename', async (req, res) => {
+  try {
+    const filename = req.params.filename;
+    if (filename.includes('..') || filename.includes('/')) {
+      res.status(400).json({ error: 'Invalid filename' });
+      return;
+    }
+    const content = await readFile(join(WORKSPACE, 'memory', filename), 'utf-8');
+    res.json({ content });
+  } catch {
+    res.status(404).json({ error: 'File not found' });
+  }
+});
+
+// ---- Ideas API ----
+const IDEAS_FILE = join(WORKSPACE, 'projects/mission-control/data/ideas.json');
+
+async function loadIdeasFile(): Promise<unknown[]> {
+  try {
+    const raw = await readFile(IDEAS_FILE, 'utf-8');
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+async function saveIdeasFile(ideas: unknown[]) {
+  const { writeFile, mkdir } = await import('node:fs/promises');
+  const { dirname } = await import('node:path');
+  await mkdir(dirname(IDEAS_FILE), { recursive: true });
+  await writeFile(IDEAS_FILE, JSON.stringify(ideas, null, 2));
+}
+
+type BrainstormIdea = {
+  id: string;
+  title: string;
+  description: string;
+  techStack: string[];
+  feasibility: number;
+  agentName: string;
+  agentModel: string;
+  sessionDate: string;
+  starred: boolean;
+  dismissed: boolean;
+  createdAt: string;
+};
+
+function buildMockIdeas(sessionDate: string): BrainstormIdea[] {
+  return [
+    {
+      id: crypto.randomUUID(),
+      title: 'GigaShift — Factory Shift Swap App',
+      description: 'A mobile-first PWA for Gigafactory workers to swap shifts, claim open slots, and track overtime. Integrates with existing scheduling systems via REST API.',
+      techStack: ['React', 'PWA', 'Node.js', 'SQLite', 'Tailwind'],
+      feasibility: 4,
+      agentName: 'Andy',
+      agentModel: 'claude-opus-4',
+      sessionDate,
+      starred: false,
+      dismissed: false,
+      createdAt: new Date().toISOString(),
+    },
+    {
+      id: crypto.randomUUID(),
+      title: 'dotwatch — Dotfile Change Monitor',
+      description: 'A Linux CLI daemon that watches your dotfiles for changes, auto-commits to a git repo, and sends desktop notifications. Never lose a config tweak again.',
+      techStack: ['Rust', 'inotify', 'Git', 'D-Bus', 'systemd'],
+      feasibility: 5,
+      agentName: 'Andy',
+      agentModel: 'claude-opus-4',
+      sessionDate,
+      starred: false,
+      dismissed: false,
+      createdAt: new Date(Date.now() + 60000).toISOString(),
+    },
+    {
+      id: crypto.randomUUID(),
+      title: 'BreakRoom — Anonymous Factory Feedback',
+      description: 'An anonymous feedback board for factory floor workers to report safety issues, suggest improvements, and vote on ideas without fear of retaliation.',
+      techStack: ['Next.js', 'PostgreSQL', 'Tailwind', 'Auth.js'],
+      feasibility: 3,
+      agentName: 'Sage',
+      agentModel: 'gemini-2.5-pro',
+      sessionDate,
+      starred: false,
+      dismissed: false,
+      createdAt: new Date(Date.now() + 120000).toISOString(),
+    },
+    {
+      id: crypto.randomUUID(),
+      title: 'pkgscope — Dependency Audit Dashboard',
+      description: 'A self-hosted web dashboard that scans your projects for outdated or vulnerable npm/cargo/pip dependencies and shows a unified risk score with auto-PR capabilities.',
+      techStack: ['Go', 'React', 'Docker', 'GitHub API'],
+      feasibility: 4,
+      agentName: 'Sage',
+      agentModel: 'gemini-2.5-pro',
+      sessionDate,
+      starred: false,
+      dismissed: false,
+      createdAt: new Date(Date.now() + 180000).toISOString(),
+    },
+    {
+      id: crypto.randomUUID(),
+      title: 'TermPal — AI Terminal Companion',
+      description: 'A lightweight terminal sidebar that watches your shell commands and proactively suggests fixes, alternatives, and documentation links using local LLMs via Ollama.',
+      techStack: ['Python', 'Ollama', 'Rich', 'tmux'],
+      feasibility: 3,
+      agentName: 'Andy',
+      agentModel: 'claude-opus-4',
+      sessionDate,
+      starred: false,
+      dismissed: false,
+      createdAt: new Date(Date.now() + 240000).toISOString(),
+    },
+  ];
+}
+
+function normalizeIdeas(rawIdeas: unknown[], sessionDate: string): BrainstormIdea[] {
+  return rawIdeas.map((idea, idx) => {
+    const record = (idea ?? {}) as Record<string, unknown>;
+    const createdAt = typeof record.createdAt === 'string'
+      ? record.createdAt
+      : new Date(Date.now() + idx * 60000).toISOString();
+    return {
+      id: typeof record.id === 'string' ? record.id : crypto.randomUUID(),
+      title: typeof record.title === 'string' ? record.title : `Untitled Idea ${idx + 1}`,
+      description: typeof record.description === 'string' ? record.description : 'No description provided.',
+      techStack: Array.isArray(record.techStack)
+        ? record.techStack.map((t) => String(t))
+        : [],
+      feasibility: typeof record.feasibility === 'number' ? Math.max(1, Math.min(5, Math.round(record.feasibility))) : 3,
+      agentName: typeof record.agentName === 'string' ? record.agentName : 'Creative',
+      agentModel: typeof record.agentModel === 'string' ? record.agentModel : 'qwen3:8b',
+      sessionDate: typeof record.sessionDate === 'string' ? record.sessionDate : sessionDate,
+      starred: typeof record.starred === 'boolean' ? record.starred : false,
+      dismissed: typeof record.dismissed === 'boolean' ? record.dismissed : false,
+      createdAt,
+    };
+  });
+}
+
+function extractJsonArray(text: string): unknown[] | null {
+  const start = text.indexOf('[');
+  const end = text.lastIndexOf(']');
+  if (start === -1 || end === -1 || end <= start) return null;
+  try {
+    const parsed = JSON.parse(text.slice(start, end + 1));
+    return Array.isArray(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+async function generateIdeasWithOllama(sessionDate: string): Promise<BrainstormIdea[] | null> {
+  const prompt = [
+    'Generate 5 app ideas as JSON only.',
+    'Return a JSON array of 5 objects with fields:',
+    'id, title, description, techStack (array of strings), feasibility (1-5), agentName, agentModel, sessionDate, starred, dismissed, createdAt.',
+    `Set sessionDate to "${sessionDate}". Set starred and dismissed to false.`,
+    'No extra text. JSON only.',
+  ].join(' ');
+
+  const res = await fetch('http://localhost:11434/api/generate', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: 'qwen3:8b',
+      prompt,
+      stream: false,
+    }),
+  });
+  if (!res.ok) return null;
+  const data = await res.json() as { response?: string };
+  const text = typeof data.response === 'string' ? data.response : '';
+  const parsed = extractJsonArray(text);
+  if (!parsed) return null;
+  return normalizeIdeas(parsed, sessionDate);
+}
+
+app.get('/api/ideas', async (_req, res) => {
+  try {
+    const ideas = await loadIdeasFile();
+    res.json(ideas);
+  } catch {
+    res.status(500).json({ error: 'Failed to load ideas' });
+  }
+});
+
+app.post('/api/ideas', async (req, res) => {
+  try {
+    const ideas = await loadIdeasFile();
+    const idea = req.body;
+    if (!idea || !idea.id) {
+      res.status(400).json({ error: 'Invalid idea' });
+      return;
+    }
+    ideas.push(idea);
+    await saveIdeasFile(ideas);
+    res.json({ ok: true });
+  } catch {
+    res.status(500).json({ error: 'Failed to save idea' });
+  }
+});
+
+app.patch('/api/ideas/:id', async (req, res) => {
+  try {
+    const ideas = await loadIdeasFile() as Record<string, unknown>[];
+    const idx = ideas.findIndex((i) => i.id === req.params.id);
+    if (idx === -1) {
+      res.status(404).json({ error: 'Idea not found' });
+      return;
+    }
+    Object.assign(ideas[idx]!, req.body);
+    await saveIdeasFile(ideas);
+    res.json({ ok: true });
+  } catch {
+    res.status(500).json({ error: 'Failed to update idea' });
+  }
+});
+
+app.post('/api/creative-time', async (_req, res) => {
+  const sessionDate = new Date().toISOString();
+  let ideas: BrainstormIdea[] | null = null;
+  try {
+    ideas = await generateIdeasWithOllama(sessionDate);
+  } catch {
+    ideas = null;
+  }
+  const finalIdeas = ideas ?? buildMockIdeas(sessionDate);
+
+  // Also persist to file
+  try {
+    const existing = await loadIdeasFile();
+    await saveIdeasFile([...existing, ...finalIdeas]);
+  } catch { /* best effort */ }
+
+  res.json(finalIdeas);
+});
+
+// ---- Git API ----
+app.get('/api/git/status', async (_req, res) => {
+  try {
+    const { stdout } = await execAsync('git status --porcelain', { cwd: REPO_ROOT });
+    const entries = stdout.split('\n').map((line) => line.trimEnd()).filter(Boolean);
+    res.json({ entries, raw: stdout });
+  } catch (err) {
+    res.status(500).json({ error: formatExecError(err) });
+  }
+});
+
+app.post('/api/git/pull', async (_req, res) => {
+  try {
+    const { stdout, stderr } = await execAsync('git pull', {
+      cwd: REPO_ROOT,
+      env: { ...process.env, GIT_SSH_COMMAND: 'ssh -i ~/.ssh/id_ed25519_andy' },
+    });
+    res.json({ ok: true, output: `${stdout}${stderr ?? ''}`.trim() });
+  } catch (err) {
+    res.status(500).json({ error: formatExecError(err) });
+  }
+});
+
+app.post('/api/git/push', async (_req, res) => {
+  try {
+    const { stdout, stderr } = await execAsync('git push', {
+      cwd: REPO_ROOT,
+      env: { ...process.env, GIT_SSH_COMMAND: 'ssh -i ~/.ssh/id_ed25519_andy' },
+    });
+    res.json({ ok: true, output: `${stdout}${stderr ?? ''}`.trim() });
+  } catch (err) {
+    res.status(500).json({ error: formatExecError(err) });
+  }
+});
+
+app.post('/api/git/commit', async (req, res) => {
+  const { message } = req.body as { message?: string };
+  if (!message || typeof message !== 'string' || !message.trim()) {
+    res.status(400).json({ error: 'Commit message required' });
+    return;
+  }
+  try {
+    await execAsync('git add -A', { cwd: REPO_ROOT });
+    const { stdout, stderr } = await execAsync(`git commit -m ${JSON.stringify(message)}`, { cwd: REPO_ROOT });
+    res.json({ ok: true, output: `${stdout}${stderr ?? ''}`.trim() });
+  } catch (err) {
+    res.status(500).json({ error: formatExecError(err) });
+  }
+});
+
+// ---- Calendar Events API ----
+const EVENTS_FILE = join(WORKSPACE, 'projects/mission-control/data/events.json');
+
+async function loadEventsFile(): Promise<unknown[]> {
+  try {
+    const raw = await readFile(EVENTS_FILE, 'utf-8');
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+async function saveEventsFile(events: unknown[]) {
+  const { writeFile, mkdir } = await import('node:fs/promises');
+  const { dirname } = await import('node:path');
+  await mkdir(dirname(EVENTS_FILE), { recursive: true });
+  await writeFile(EVENTS_FILE, JSON.stringify(events, null, 2));
+}
+
+app.get('/api/calendar/events', async (_req, res) => {
+  try {
+    const events = await loadEventsFile();
+    res.json(events);
+  } catch {
+    res.status(500).json({ error: 'Failed to load events' });
+  }
+});
+
+app.post('/api/calendar/events', async (req, res) => {
+  try {
+    const events = await loadEventsFile();
+    const event = req.body;
+    if (!event || !event.id || !event.title || !event.date) {
+      res.status(400).json({ error: 'Invalid event' });
+      return;
+    }
+    events.push(event);
+    await saveEventsFile(events);
+    res.json({ ok: true });
+  } catch {
+    res.status(500).json({ error: 'Failed to save event' });
+  }
+});
+
+app.delete('/api/calendar/events/:id', async (req, res) => {
+  try {
+    const events = await loadEventsFile() as Record<string, unknown>[];
+    const filtered = events.filter((e) => e.id !== req.params.id);
+    if (filtered.length === events.length) {
+      res.status(404).json({ error: 'Event not found' });
+      return;
+    }
+    await saveEventsFile(filtered);
+    res.json({ ok: true });
+  } catch {
+    res.status(500).json({ error: 'Failed to delete event' });
+  }
+});
+
+app.get('/health', (_req, res) => {
+  res.json({ status: 'ok' });
+});
+
+app.listen(PORT, () => {
+  console.log(`Vitals server running on http://localhost:${PORT}`);
+});
