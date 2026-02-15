@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Plus, Flag, UserCircle, CalendarClock } from 'lucide-react';
+import { Plus, Flag, UserCircle, CalendarClock, Trash2, Inbox } from 'lucide-react';
 import type { Mission, MissionPriority, MissionStatus, Agent } from '../types';
 import { useAgents } from '../hooks/useAgents';
+import { ConfirmDialog } from './ConfirmDialog';
 
 const STORAGE_KEY = 'mission-control-missions';
 
@@ -57,6 +58,7 @@ export function MissionBoard() {
   const [description, setDescription] = useState('');
   const [priority, setPriority] = useState<MissionPriority>('medium');
   const [assigneeId, setAssigneeId] = useState('unassigned');
+  const [deleteTarget, setDeleteTarget] = useState<Mission | null>(null);
 
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [dragOverColumn, setDragOverColumn] = useState<MissionStatus | null>(null);
@@ -130,6 +132,16 @@ export function MissionBoard() {
     );
   };
 
+  const handleDeleteMission = useCallback((mission: Mission) => {
+    setDeleteTarget(mission);
+  }, []);
+
+  const confirmDelete = useCallback(() => {
+    if (!deleteTarget) return;
+    setMissions(prev => prev.filter(m => m.id !== deleteTarget.id));
+    setDeleteTarget(null);
+  }, [deleteTarget]);
+
   const handleDragStart = useCallback((event: React.DragEvent<HTMLDivElement>, missionId: string) => {
     event.dataTransfer.setData('text/plain', missionId);
     event.dataTransfer.effectAllowed = 'move';
@@ -147,7 +159,6 @@ export function MissionBoard() {
     event.dataTransfer.dropEffect = 'move';
     setDragOverColumn(status);
 
-    // Find nearest card for drop indicator
     const listEl = columnRefs.current[status];
     if (!listEl) {
       setDropTargetId(null);
@@ -196,11 +207,9 @@ export function MissionBoard() {
       const mission = prev.find(m => m.id === missionId);
       if (!mission) return prev;
 
-      // Remove the mission from its current position
       const without = prev.filter(m => m.id !== missionId);
       const updated: Mission = { ...mission, status: targetStatus };
 
-      // Find insertion index
       const columnMissions = without.filter(m => m.status === targetStatus);
 
       if (dropTargetId) {
@@ -212,7 +221,6 @@ export function MissionBoard() {
         }
       }
 
-      // No specific target — append to end of column
       if (columnMissions.length === 0) {
         return [...without, updated];
       }
@@ -229,6 +237,16 @@ export function MissionBoard() {
 
   return (
     <div className="board board--missions flex-1 flex flex-col min-h-0" role="tabpanel" id="panel-missions">
+      <ConfirmDialog
+        open={deleteTarget !== null}
+        title="Delete Mission"
+        message={`Are you sure you want to delete "${deleteTarget?.title}"? This cannot be undone.`}
+        confirmLabel="Delete"
+        danger
+        onConfirm={confirmDelete}
+        onCancel={() => setDeleteTarget(null)}
+      />
+
       <div className="board__header flex items-center justify-between px-6 py-4 border-b">
         <div>
           <h2 className="board__title text-lg font-semibold">Mission Board</h2>
@@ -330,7 +348,10 @@ export function MissionBoard() {
               ref={el => { columnRefs.current[status] = el; }}
             >
               {missionsByStatus[status].length === 0 && (
-                <div className="mission-empty">No missions here yet.</div>
+                <div className="mission-empty">
+                  <Inbox size={20} aria-hidden="true" style={{ opacity: 0.4 }} />
+                  <p>No missions here yet</p>
+                </div>
               )}
               {missionsByStatus[status].map(mission => (
                 <div
@@ -350,7 +371,7 @@ export function MissionBoard() {
                   onClick={() => handleMoveMission(mission.id)}
                   role="button"
                   tabIndex={0}
-                  aria-label={`Move ${mission.title} to ${statusLabels[nextStatus(mission.status)]}`}
+                  aria-label={`${mission.title} — ${priorityLabels[mission.priority]} priority. Click to move to ${statusLabels[nextStatus(mission.status)]}`}
                   onKeyDown={event => {
                     if (event.key === 'Enter' || event.key === ' ') {
                       event.preventDefault();
@@ -362,7 +383,17 @@ export function MissionBoard() {
                     <span className={priorityClassName[mission.priority]}>
                       {priorityLabels[mission.priority]}
                     </span>
-                    <span className="mission-card__move">Click to advance</span>
+                    <div className="mission-card__top-actions">
+                      <button
+                        type="button"
+                        className="mission-card__delete"
+                        onClick={(e) => { e.stopPropagation(); handleDeleteMission(mission); }}
+                        aria-label={`Delete mission: ${mission.title}`}
+                        title="Delete mission"
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    </div>
                   </div>
                   <h4 className="mission-card__title">{mission.title}</h4>
                   <p className="mission-card__description">

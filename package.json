@@ -12,11 +12,13 @@
     "dev:all": "npx concurrently -n vite,server -c cyan,green \"vite\" \"tsx src/server/index.ts\""
   },
   "dependencies": {
+    "@types/ws": "^8.18.1",
     "cors": "^2.8.5",
     "express": "^5.1.0",
     "lucide-react": "^0.564.0",
     "react": "^19.2.0",
-    "react-dom": "^19.2.0"
+    "react-dom": "^19.2.0",
+    "ws": "^8.19.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",

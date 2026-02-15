@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, memo } from 'react';
 import { Cpu, MemoryStick, HardDrive, MonitorSpeaker, Activity, ListTodo, Minimize2, Users, Brain, BarChart3, GitBranch } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useVitals } from '../hooks/useVitals';
@@ -13,7 +13,7 @@ interface VitalProps {
   color: string;
 }
 
-function Vital({ icon: Icon, label, value, color }: VitalProps) {
+const Vital = memo(function Vital({ icon: Icon, label, value, color }: VitalProps) {
   return (
     <div className="flex items-center gap-2" role="meter" aria-label={`${label}: ${value}%`} aria-valuenow={value} aria-valuemin={0} aria-valuemax={100}>
       <Icon size={12} style={{ color }} aria-hidden="true" />
@@ -24,24 +24,25 @@ function Vital({ icon: Icon, label, value, color }: VitalProps) {
       <span className="vital-value text-xs font-mono w-8">{value}%</span>
     </div>
   );
-}
+});
 
 type PanelId = 'cron' | 'memory' | 'git' | null;
 
 interface ActionDef {
   icon: LucideIcon;
   label: string;
+  tooltip: string;
   panelId?: PanelId;
 }
 
 const actions: ActionDef[] = [
-  { icon: Activity, label: 'Status', panelId: 'cron' },
-  { icon: ListTodo, label: 'Tasks' },
-  { icon: Minimize2, label: 'Compact' },
-  { icon: Users, label: 'Agents' },
-  { icon: Brain, label: 'Memory', panelId: 'memory' },
-  { icon: GitBranch, label: 'Git', panelId: 'git' },
-  { icon: BarChart3, label: 'Metrics' },
+  { icon: Activity, label: 'Status', tooltip: 'View cron jobs & scheduled tasks', panelId: 'cron' },
+  { icon: ListTodo, label: 'Tasks', tooltip: 'Task queue (coming soon)' },
+  { icon: Minimize2, label: 'Compact', tooltip: 'Toggle compact view (coming soon)' },
+  { icon: Users, label: 'Agents', tooltip: 'Agent management (coming soon)' },
+  { icon: Brain, label: 'Memory', tooltip: 'Browse agent memory files', panelId: 'memory' },
+  { icon: GitBranch, label: 'Git', tooltip: 'Git status, pull, push & commit', panelId: 'git' },
+  { icon: BarChart3, label: 'Metrics', tooltip: 'Performance metrics (coming soon)' },
 ];
 
 export function VitalsBar() {
@@ -61,12 +62,13 @@ export function VitalsBar() {
       <footer className="vitals-bar border-t" role="contentinfo" aria-label="System vitals">
         {/* Action buttons */}
         <div className="vitals-actions flex items-center gap-1 px-4 py-2 border-b">
-          {actions.map(({ icon: Icon, label, panelId }) => (
+          {actions.map(({ icon: Icon, label, tooltip, panelId }) => (
             <button
               key={label}
               className={`vitals-action-btn flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs cursor-pointer ${activePanel === panelId ? 'vitals-action-btn--active' : ''}`}
-              aria-label={label}
+              aria-label={tooltip}
               aria-pressed={activePanel === panelId}
+              title={tooltip}
               onClick={() => handleAction(panelId as PanelId)}
             >
               <Icon size={12} aria-hidden="true" />

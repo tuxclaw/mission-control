@@ -62,10 +62,8 @@ export function IdeaBoard() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Sync to localStorage
   useEffect(() => { saveIdeas(ideas); }, [ideas]);
 
-  // Fetch from server on mount
   useEffect(() => {
     fetch(`${API_BASE}/api/ideas`)
       .then(r => r.ok ? r.json() : Promise.reject('Failed'))
@@ -83,6 +81,10 @@ export function IdeaBoard() {
       })
       .catch(() => { /* server offline is fine */ });
   }, []);
+
+  const visibleIdeas = useMemo(() => ideas.filter(i => !i.dismissed), [ideas]);
+  const totalCount = visibleIdeas.length;
+  const starredCount = useMemo(() => visibleIdeas.filter(i => i.starred).length, [visibleIdeas]);
 
   const agents = useMemo(() => {
     const set = new Set(ideas.map(i => i.agentName));
@@ -124,7 +126,6 @@ export function IdeaBoard() {
         }
         return merged;
       });
-      // Also persist to server
       for (const idea of newIdeas) {
         fetch(`${API_BASE}/api/ideas`, {
           method: 'POST',
@@ -180,6 +181,8 @@ export function IdeaBoard() {
           <h2 className="board__title text-lg font-semibold flex items-center gap-2">
             <Sparkles size={18} aria-hidden="true" />
             Creative Time — Idea Board
+            <span className="idea-count">{totalCount} ideas</span>
+            {starredCount > 0 && <span className="idea-count idea-count--starred">★ {starredCount}</span>}
           </h2>
           <p className="board__subtitle text-xs mt-1">AI-generated ideas from daily brainstorming sessions</p>
         </div>
@@ -210,6 +213,7 @@ export function IdeaBoard() {
           type="button"
           className={`idea-filter-btn ${filter === 'all' ? 'idea-filter-btn--active' : ''}`}
           onClick={() => setFilter('all')}
+          aria-pressed={filter === 'all'}
         >
           All
         </button>
@@ -217,6 +221,7 @@ export function IdeaBoard() {
           type="button"
           className={`idea-filter-btn ${filter === 'starred' ? 'idea-filter-btn--active' : ''}`}
           onClick={() => setFilter('starred')}
+          aria-pressed={filter === 'starred'}
         >
           ★ Starred
         </button>
@@ -226,6 +231,7 @@ export function IdeaBoard() {
             type="button"
             className={`idea-filter-btn ${filter === agent ? 'idea-filter-btn--active' : ''}`}
             onClick={() => setFilter(agent)}
+            aria-pressed={filter === agent}
           >
             {agent}
           </button>
@@ -236,7 +242,7 @@ export function IdeaBoard() {
         {filtered.length === 0 && (
           <div className="idea-empty">
             <Lightbulb size={24} aria-hidden="true" />
-            <p>No ideas yet. Creative Time runs daily at 2:00 PM Pacific. 🧠</p>
+            <p>{filter === 'starred' ? 'No starred ideas yet. Star your favorites!' : 'No ideas yet. Creative Time runs daily at 2:00 PM Pacific. 🧠'}</p>
           </div>
         )}
 
@@ -254,6 +260,7 @@ export function IdeaBoard() {
                         className={`idea-star-btn ${idea.starred ? 'idea-star-btn--active' : ''}`}
                         onClick={() => toggleStar(idea.id)}
                         aria-label={idea.starred ? 'Unstar idea' : 'Star idea'}
+                        aria-pressed={idea.starred}
                       >
                         <Star size={14} fill={idea.starred ? 'currentColor' : 'none'} />
                       </button>
@@ -261,7 +268,7 @@ export function IdeaBoard() {
                         type="button"
                         className="idea-dismiss-btn"
                         onClick={() => dismiss(idea.id)}
-                        aria-label="Dismiss idea"
+                        aria-label={`Dismiss idea: ${idea.title}`}
                       >
                         <X size={14} />
                       </button>

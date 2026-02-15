@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ChevronLeft, ChevronRight, Plus, Trash2, Clock, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus, Trash2, Clock, X, CalendarDays } from 'lucide-react';
 import type { CalendarEvent, CalendarEventColor, CronJob } from '../types';
+import { ConfirmDialog } from './ConfirmDialog';
 
 const VITALS_API = import.meta.env.VITE_VITALS_API_URL ?? 'http://localhost:3851';
 const STORAGE_KEY = 'mission-control-calendar-events';
@@ -23,16 +24,13 @@ function getCalendarGrid(year: number, month: number): Date[] {
   const first = new Date(year, month, 1);
   const startDay = first.getDay();
   const days: Date[] = [];
-  // Fill leading days from previous month
   for (let i = startDay - 1; i >= 0; i--) {
     days.push(new Date(year, month, -i));
   }
-  // Current month
   const total = getDaysInMonth(year, month);
   for (let d = 1; d <= total; d++) {
     days.push(new Date(year, month, d));
   }
-  // Fill trailing days
   while (days.length % 7 !== 0) {
     const last = days[days.length - 1];
     const next = new Date(last.getFullYear(), last.getMonth(), last.getDate() + 1);
@@ -41,7 +39,6 @@ function getCalendarGrid(year: number, month: number): Date[] {
   return days;
 }
 
-/** Calculate next N run dates from a cron job */
 function getNextCronDates(job: CronJob, count: number): string[] {
   const dates: string[] = [];
   if (!job.enabled || !job.state.nextRunAtMs) return dates;
@@ -53,7 +50,7 @@ function getNextCronDates(job: CronJob, count: number): string[] {
     if (intervalMs > 0) {
       ts += intervalMs;
     } else {
-      break; // Can't predict without interval
+      break;
     }
   }
   return dates;
@@ -80,6 +77,7 @@ export function CalendarView() {
   const [cronEvents, setCronEvents] = useState<CalendarEvent[]>([]);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<CalendarEvent | null>(null);
 
   // Form state
   const [formTitle, setFormTitle] = useState('');
@@ -92,7 +90,6 @@ export function CalendarView() {
   const grid = useMemo(() => getCalendarGrid(year, month), [year, month]);
   const monthLabel = new Date(year, month).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
 
-  // Fetch events from server
   const fetchServerEvents = useCallback(async () => {
     try {
       const res = await fetch(`${VITALS_API}/api/calendar/events`);
@@ -106,7 +103,6 @@ export function CalendarView() {
     }
   }, []);
 
-  // Fetch cron jobs and generate calendar events
   const fetchCronEvents = useCallback(async () => {
     try {
       const res = await fetch(`${VITALS_API}/api/cron/jobs`);
@@ -136,7 +132,6 @@ export function CalendarView() {
     fetchCronEvents();
   }, [fetchServerEvents, fetchCronEvents]);
 
-  // Merge all events
   const allEvents = useMemo(() => [...events, ...cronEvents], [events, cronEvents]);
 
   const eventsByDate = useMemo(() => {
@@ -185,7 +180,6 @@ export function CalendarView() {
     setEvents(updated);
     saveLocalEvents(updated);
 
-    // Persist to server
     try {
       await fetch(`${VITALS_API}/api/calendar/events`, {
         method: 'POST',
@@ -203,17 +197,30 @@ export function CalendarView() {
     setSelectedDate(formDate);
   };
 
-  const deleteEvent = async (id: string) => {
+  const confirmDeleteEvent = useCallback(async () => {
+    if (!deleteTarget) return;
+    const id = deleteTarget.id;
     const updated = events.filter(ev => ev.id !== id);
     setEvents(updated);
     saveLocalEvents(updated);
+    setDeleteTarget(null);
     try {
       await fetch(`${VITALS_API}/api/calendar/events/${id}`, { method: 'DELETE' });
     } catch { /* best effort */ }
-  };
+  }, [deleteTarget, events]);
 
   return (
     <div className="board board--calendar flex-1 flex flex-col min-h-0" role="tabpanel" id="panel-calendar">
+      <ConfirmDialog
+        open={deleteTarget !== null}
+        title="Delete Event"
+        message={`Are you sure you want to delete "${deleteTarget?.title}"?`}
+        confirmLabel="Delete"
+        danger
+        onConfirm={confirmDeleteEvent}
+        onCancel={() => setDeleteTarget(null)}
+      />
+
       {/* Header */}
       <div className="board__header flex items-center justify-between px-6 py-4 border-b">
         <div>
@@ -221,7 +228,7 @@ export function CalendarView() {
           <p className="board__subtitle text-xs mt-1">Events, schedules, and deadlines.</p>
         </div>
         <div className="flex items-center gap-2">
-          <button type="button" className="cal-today-btn" onClick={goToday}>Today</button>
+          <button type="button" className="cal-today-btn" onClick={goToday} aria-label="Go to today">Today</button>
           <button
             type="button"
             className="board__action-btn flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium"
@@ -269,15 +276,16 @@ export function CalendarView() {
             </label>
             <label className="mission-form__field">
               <span className="mission-form__label">Color</span>
-              <div className="cal-color-picker">
+              <div className="cal-color-picker" role="radiogroup" aria-label="Event color">
                 {COLOR_OPTIONS.map(c => (
                   <button
                     key={c}
                     type="button"
+                    role="radio"
                     className={`cal-color-swatch cal-color-swatch--${c} ${formColor === c ? 'cal-color-swatch--active' : ''}`}
                     onClick={() => setFormColor(c)}
-                    aria-label={`Color ${c}`}
-                    aria-pressed={formColor === c}
+                    aria-label={`Color: ${c}`}
+                    aria-checked={formColor === c}
                   />
                 ))}
               </div>
@@ -315,9 +323,9 @@ export function CalendarView() {
           </div>
 
           {/* Day headers */}
-          <div className="cal-grid cal-grid--header">
+          <div className="cal-grid cal-grid--header" role="row">
             {DAY_NAMES.map(d => (
-              <div key={d} className="cal-day-header">{d}</div>
+              <div key={d} className="cal-day-header" role="columnheader">{d}</div>
             ))}
           </div>
 
@@ -373,13 +381,16 @@ export function CalendarView() {
                     day: 'numeric',
                   })}
                 </h4>
-                <button type="button" className="panel-icon-btn" onClick={() => setSelectedDate(null)} aria-label="Close detail">
+                <button type="button" className="panel-icon-btn" onClick={() => setSelectedDate(null)} aria-label="Close detail panel">
                   <X size={14} />
                 </button>
               </div>
               <div className="cal-detail__list">
                 {selectedEvents.length === 0 && (
-                  <p className="cal-detail__empty">No events on this day.</p>
+                  <div className="cal-detail__empty-state">
+                    <CalendarDays size={20} aria-hidden="true" style={{ opacity: 0.4 }} />
+                    <p className="cal-detail__empty">No events on this day.</p>
+                  </div>
                 )}
                 {selectedEvents.map(ev => (
                   <div key={ev.id} className={`cal-event-card cal-event-card--${ev.color} card-animate`}>
@@ -390,8 +401,9 @@ export function CalendarView() {
                         <button
                           type="button"
                           className="cal-event-card__delete"
-                          onClick={() => deleteEvent(ev.id)}
+                          onClick={() => setDeleteTarget(ev)}
                           aria-label={`Delete ${ev.title}`}
+                          title="Delete event"
                         >
                           <Trash2 size={12} />
                         </button>

@@ -4,12 +4,15 @@ import { readFile, readdir } from 'node:fs/promises';
 import { exec } from 'node:child_process';
 import { promisify } from 'node:util';
 import { join } from 'node:path';
+import { createServer } from 'node:http';
+import WebSocket, { WebSocketServer } from 'ws';
 
 const execAsync = promisify(exec);
 const WORKSPACE = process.env.OPENCLAW_WORKSPACE ?? '/home/tux/.openclaw/workspace';
 const REPO_ROOT = join(WORKSPACE, 'projects/mission-control');
 const app = express();
 const PORT = Number(process.env.VITALS_PORT ?? 3851);
+const server = createServer(app);
 
 app.use(cors());
 app.use(express.json());
@@ -23,6 +26,138 @@ function gatewayHeaders(extra?: Record<string, string>) {
     ...(extra ?? {}),
     ...(GATEWAY_TOKEN ? { Authorization: `Bearer ${GATEWAY_TOKEN}` } : {}),
   };
+}
+
+function safeJsonParse(text: string): Record<string, unknown> | null {
+  try {
+    const parsed = JSON.parse(text) as Record<string, unknown>;
+    return parsed && typeof parsed === 'object' ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function extractGatewayText(payload: Record<string, unknown>): string | null {
+  const content =
+    (payload.response as string) ??
+    (payload.message as string) ??
+    (payload.text as string) ??
+    (payload.content as string);
+  return typeof content === 'string' ? content : null;
+}
+
+function extractUsage(payload: Record<string, unknown>): Record<string, number> | undefined {
+  if (!payload.usage || typeof payload.usage !== 'object') return undefined;
+  return payload.usage as Record<string, number>;
+}
+
+function extractToken(payload: Record<string, unknown>): string | null {
+  const direct =
+    (payload.token as string) ??
+    (payload.text as string) ??
+    (payload.content as string) ??
+    (payload.delta as string);
+  if (typeof direct === 'string' && direct.length > 0) return direct;
+
+  const choices = payload.choices as Array<Record<string, unknown>> | undefined;
+  if (choices && choices.length > 0) {
+    const delta = choices[0]?.delta as Record<string, unknown> | undefined;
+    const deltaText = (delta?.content as string) ?? (choices[0]?.text as string);
+    if (typeof deltaText === 'string' && deltaText.length > 0) return deltaText;
+  }
+
+  return null;
+}
+
+function isEventStream(contentType: string): boolean {
+  return contentType.includes('text/event-stream');
+}
+
+function isNdjson(contentType: string): boolean {
+  return contentType.includes('application/x-ndjson')
+    || contentType.includes('application/ndjson')
+    || contentType.includes('application/jsonl');
+}
+
+function sendWs(ws: WebSocket, payload: unknown) {
+  if (ws.readyState !== WebSocket.OPEN) return;
+  ws.send(JSON.stringify(payload));
+}
+
+async function handleGatewayStream(ws: WebSocket, res: Response) {
+  const contentType = res.headers.get('content-type') ?? '';
+  const useSse = isEventStream(contentType);
+  const useNdjson = isNdjson(contentType);
+
+  if (!res.body || (!useSse && !useNdjson)) {
+    const text = await res.text();
+    const json = safeJsonParse(text);
+    if (json) {
+      const content = extractGatewayText(json) ?? text;
+      sendWs(ws, { type: 'message', content, usage: extractUsage(json) });
+    } else {
+      sendWs(ws, { type: 'message', content: text });
+    }
+    sendWs(ws, { type: 'done' });
+    return;
+  }
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+
+  const handlePayload = (payloadText: string) => {
+    const trimmed = payloadText.trim();
+    if (!trimmed) return;
+    if (trimmed === '[DONE]') {
+      sendWs(ws, { type: 'done' });
+      return;
+    }
+    const payload = safeJsonParse(trimmed);
+    if (payload) {
+      const token = extractToken(payload) ?? extractGatewayText(payload);
+      if (token) sendWs(ws, { type: 'token', token, usage: extractUsage(payload) });
+      return;
+    }
+    sendWs(ws, { type: 'token', token: trimmed });
+  };
+
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+
+    if (useSse) {
+      let idx = buffer.indexOf('\n\n');
+      while (idx !== -1) {
+        const rawEvent = buffer.slice(0, idx);
+        buffer = buffer.slice(idx + 2);
+        const dataLines = rawEvent
+          .split('\n')
+          .map((line) => line.trim())
+          .filter((line) => line.startsWith('data:'))
+          .map((line) => line.replace(/^data:\s?/, ''));
+        if (dataLines.length > 0) {
+          handlePayload(dataLines.join('\n'));
+        }
+        idx = buffer.indexOf('\n\n');
+      }
+    } else if (useNdjson) {
+      let lineIdx = buffer.indexOf('\n');
+      while (lineIdx !== -1) {
+        const line = buffer.slice(0, lineIdx);
+        buffer = buffer.slice(lineIdx + 1);
+        handlePayload(line);
+        lineIdx = buffer.indexOf('\n');
+      }
+    }
+  }
+
+  if (buffer.trim()) {
+    handlePayload(buffer);
+  }
+
+  sendWs(ws, { type: 'done' });
 }
 
 function extractModelName(model?: string): string {
@@ -96,6 +231,75 @@ app.post('/api/chat', async (req, res) => {
     const msg = err instanceof Error ? err.message : 'Proxy error';
     res.status(502).json({ error: msg });
   }
+});
+
+// ---- WebSocket chat streaming ----
+const wss = new WebSocketServer({ server, path: '/ws/chat' });
+
+wss.on('connection', (ws) => {
+  let inFlight = false;
+  let abortController: AbortController | null = null;
+
+  ws.on('close', () => {
+    abortController?.abort();
+    abortController = null;
+  });
+
+  ws.on('message', async (raw) => {
+    if (inFlight) {
+      sendWs(ws, { type: 'error', message: 'Message already in progress.' });
+      return;
+    }
+
+    const text = raw.toString();
+    let message = text;
+    try {
+      const parsed = JSON.parse(text) as Record<string, unknown>;
+      if (typeof parsed.message === 'string') {
+        message = parsed.message;
+      } else if (typeof parsed.content === 'string') {
+        message = parsed.content;
+      }
+    } catch {
+      // treat as raw message
+    }
+
+    if (!message || typeof message !== 'string') {
+      sendWs(ws, { type: 'error', message: 'Missing message.' });
+      return;
+    }
+
+    inFlight = true;
+    abortController = new AbortController();
+
+    try {
+      const upstream = await fetch(`${GATEWAY_URL}/api/sessions/main/message`, {
+        method: 'POST',
+        headers: gatewayHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({ message, stream: true }),
+        signal: abortController.signal,
+      });
+
+      if (!upstream.ok) {
+        const body = await upstream.text().catch(() => '');
+        sendWs(ws, {
+          type: 'error',
+          message: `Gateway error ${upstream.status}${body ? `: ${body}` : ''}`,
+        });
+        sendWs(ws, { type: 'done' });
+        return;
+      }
+
+      await handleGatewayStream(ws, upstream);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'WebSocket proxy error';
+      sendWs(ws, { type: 'error', message: msg });
+      sendWs(ws, { type: 'done' });
+    } finally {
+      inFlight = false;
+      abortController = null;
+    }
+  });
 });
 
 app.get('/api/sessions', async (_req, res) => {
@@ -642,6 +846,6 @@ app.get('/health', (_req, res) => {
   res.json({ status: 'ok' });
 });
 
-app.listen(PORT, () => {
+server.listen(PORT, () => {
   console.log(`Vitals server running on http://localhost:${PORT}`);
 });

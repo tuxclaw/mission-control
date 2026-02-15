@@ -23,6 +23,8 @@
   --transition-slow: 500ms ease;
   --glow-accent: 0 0 12px rgba(6, 182, 212, 0.3);
   --glow-green: 0 0 8px rgba(34, 197, 94, 0.4);
+  --glow-yellow: 0 0 8px rgba(234, 179, 8, 0.4);
+  --glow-red: 0 0 8px rgba(239, 68, 68, 0.4);
 }
 
 * {
@@ -409,6 +411,45 @@ body {
 .chat-send-btn--disabled {
   background: var(--bg-tertiary);
   color: var(--text-muted);
+}
+
+.chat-connection-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border-bright);
+  flex-shrink: 0;
+}
+
+.chat-connection-dot--connected {
+  background: var(--green);
+  box-shadow: var(--glow-green);
+}
+
+.chat-connection-dot--reconnecting {
+  background: var(--yellow);
+  box-shadow: var(--glow-yellow);
+}
+
+.chat-connection-dot--disconnected {
+  background: var(--red);
+  box-shadow: var(--glow-red);
+}
+
+.chat-stream-cursor {
+  display: inline-block;
+  width: 6px;
+  height: 1em;
+  margin-left: 3px;
+  background: var(--text-primary);
+  border-radius: 2px;
+  animation: chatCursorBlink 1s steps(1, end) infinite;
+  vertical-align: -2px;
+}
+
+@keyframes chatCursorBlink {
+  0%, 50% { opacity: 1; }
+  50.01%, 100% { opacity: 0; }
 }
 
 /* === CHAT SESSION BAR === */
@@ -2253,4 +2294,233 @@ body {
   text-align: center;
   padding: 16px 0;
   margin: 0;
+}
+
+/* === APP SHELL === */
+.app-shell {
+  background: var(--bg-primary);
+}
+
+/* === CHAT TIMESTAMP HOVER === */
+.chat-timestamp--hover {
+  opacity: 0;
+  transition: opacity var(--transition-fast);
+}
+
+.chat-bubble:hover .chat-timestamp--hover,
+.chat-bubble:focus-within .chat-timestamp--hover {
+  opacity: 1;
+}
+
+/* === CONFIRM DIALOG === */
+.confirm-dialog {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-bright);
+  border-radius: 16px;
+  padding: 24px;
+  width: 90%;
+  max-width: 400px;
+  text-align: center;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.confirm-dialog__icon {
+  color: var(--yellow);
+  display: flex;
+}
+
+.confirm-dialog__title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.confirm-dialog__message {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  margin: 0;
+}
+
+.confirm-dialog__actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.confirm-dialog__cancel,
+.confirm-dialog__confirm {
+  padding: 8px 20px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  border: 1px solid transparent;
+}
+
+.confirm-dialog__cancel {
+  background: transparent;
+  color: var(--text-secondary);
+  border-color: var(--border-bright);
+}
+
+.confirm-dialog__cancel:hover {
+  background: var(--bg-hover);
+}
+
+.confirm-dialog__confirm {
+  background: var(--accent);
+  color: #000;
+  border-color: var(--accent);
+}
+
+.confirm-dialog__confirm:hover {
+  filter: brightness(1.1);
+}
+
+.confirm-dialog__confirm--danger {
+  background: var(--red);
+  border-color: var(--red);
+  color: #fff;
+}
+
+.confirm-dialog__confirm--danger:hover {
+  filter: brightness(1.15);
+}
+
+.confirm-dialog__confirm:focus-visible,
+.confirm-dialog__cancel:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* === MISSION CARD DELETE === */
+.mission-card__top-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.mission-card__delete {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 6px;
+  display: flex;
+  opacity: 0;
+  transition: all var(--transition-fast);
+}
+
+.mission-card:hover .mission-card__delete,
+.mission-card:focus-within .mission-card__delete {
+  opacity: 1;
+}
+
+.mission-card__delete:hover {
+  color: var(--red);
+  background: rgba(239, 68, 68, 0.1);
+}
+
+/* === MISSION EMPTY STATE === */
+.mission-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+/* === IDEA COUNT STARRED === */
+.idea-count--starred {
+  color: var(--yellow);
+  background: rgba(234, 179, 8, 0.1);
+  border-color: rgba(234, 179, 8, 0.3);
+}
+
+/* === CALENDAR EMPTY STATE === */
+.cal-detail__empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 24px 8px;
+  color: var(--text-muted);
+}
+
+/* === SIDEBAR TOGGLE === */
+.sidebar-toggle-btn {
+  display: none;
+}
+
+/* === RESPONSIVE === */
+@media (max-width: 768px) {
+  .sidebar-toggle-btn {
+    display: flex;
+  }
+
+  .sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    z-index: 50;
+    box-shadow: 4px 0 24px rgba(0, 0, 0, 0.4);
+  }
+
+  .header {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .vitals-meters {
+    flex-direction: column;
+    gap: 8px;
+    align-items: flex-start;
+  }
+
+  .cal-form__grid {
+    grid-template-columns: 1fr;
+  }
+
+  .mission-form__grid {
+    grid-template-columns: 1fr;
+  }
+
+  .idea-session-cards {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .mission-columns {
+    grid-template-columns: 1fr;
+  }
+
+  .cal-body {
+    flex-direction: column;
+  }
+
+  .cal-detail {
+    width: 100%;
+    min-width: 0;
+    border-left: none;
+    border-top: 1px solid var(--border);
+    max-height: 300px;
+  }
+
+  .cal-cell {
+    min-height: 48px;
+    padding: 4px 2px;
+  }
+
+  .cal-nav__label {
+    min-width: 140px;
+    font-size: 0.95rem;
+  }
 }

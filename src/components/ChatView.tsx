@@ -14,7 +14,7 @@ function formatTokens(n: number | null): string {
 }
 
 export function ChatView() {
-  const { messages, isTyping, error, sessionInfo, send, clearError } = useChat();
+  const { messages, isTyping, isStreaming, error, connectionStatus, sessionInfo, send, clearError } = useChat();
   const [input, setInput] = useState('');
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -25,11 +25,11 @@ export function ChatView() {
 
   const handleSend = useCallback(() => {
     const text = input.trim();
-    if (!text || isTyping) return;
+    if (!text || isStreaming) return;
     send(text);
     setInput('');
     inputRef.current?.focus();
-  }, [input, isTyping, send]);
+  }, [input, isStreaming, send]);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -39,12 +39,17 @@ export function ChatView() {
   }, [handleSend]);
 
   const hasInput = input.trim().length > 0;
+  const connectionClass = connectionStatus === 'connected'
+    ? 'chat-connection-dot--connected'
+    : connectionStatus === 'reconnecting'
+      ? 'chat-connection-dot--reconnecting'
+      : 'chat-connection-dot--disconnected';
 
   return (
     <div className="flex-1 flex flex-col min-h-0" role="tabpanel" id="panel-chat">
       {/* Session info bar */}
       {sessionInfo.model && (
-        <div className="chat-session-bar flex items-center gap-3 px-4 py-1.5 text-[11px] border-b" style={{}} aria-label="Session information">
+        <div className="chat-session-bar flex items-center gap-3 px-4 py-1.5 text-[11px] border-b" aria-label="Session information">
           <Cpu size={12} className="chat-session-bar__icon" aria-hidden="true" />
           <span className="chat-session-bar__model">{sessionInfo.model}</span>
           {sessionInfo.tokensIn !== null && (
@@ -82,11 +87,16 @@ export function ChatView() {
                 ? <Bot size={14} className="chat-avatar__icon" />
                 : <User size={14} className="chat-avatar__icon" />}
             </div>
-            <div>
+            <div className="chat-bubble__body">
               <div className={`chat-msg px-4 py-2.5 rounded-xl text-sm leading-relaxed ${msg.role === 'agent' ? 'chat-msg--agent' : 'chat-msg--user'}`}>
-                {msg.content}
+                <span>{msg.content}</span>
+                {msg.role === 'agent' && msg.isStreaming && (
+                  <span className="chat-stream-cursor" aria-hidden="true" />
+                )}
               </div>
-              <div className="chat-timestamp text-[10px] mt-1 px-1">{formatTime(msg.timestamp)}</div>
+              <div className="chat-timestamp chat-timestamp--hover text-[10px] mt-1 px-1" aria-label={`Sent at ${formatTime(msg.timestamp)}`}>
+                {formatTime(msg.timestamp)}
+              </div>
             </div>
           </div>
         ))}
@@ -108,6 +118,11 @@ export function ChatView() {
       {/* Input */}
       <div className="chat-input-wrap p-4 border-t">
         <div className="chat-input-box flex gap-2 items-center rounded-xl px-4 py-2">
+          <span
+            className={`chat-connection-dot ${connectionClass}`}
+            aria-label={`Connection ${connectionStatus}`}
+            role="img"
+          />
           <input
             ref={inputRef}
             value={input}
@@ -116,12 +131,12 @@ export function ChatView() {
             placeholder="Message Andy..."
             className="chat-input flex-1 bg-transparent outline-none text-sm placeholder-gray-500"
             aria-label="Message input"
-            disabled={isTyping}
+            disabled={isStreaming}
           />
           <button
             onClick={handleSend}
-            disabled={!hasInput || isTyping}
-            className={`chat-send-btn p-2 rounded-lg cursor-pointer ${hasInput && !isTyping ? 'chat-send-btn--active' : 'chat-send-btn--disabled'}`}
+            disabled={!hasInput || isStreaming}
+            className={`chat-send-btn p-2 rounded-lg cursor-pointer ${hasInput && !isStreaming ? 'chat-send-btn--active' : 'chat-send-btn--disabled'}`}
             aria-label="Send message"
           >
             <Send size={16} />

@@ -16,6 +16,7 @@ export interface ChatMessage {
   content: string;
   timestamp: Date;
   agentId?: string;
+  isStreaming?: boolean;
 }
 
 export interface SystemVitals {
