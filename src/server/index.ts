@@ -1,13 +1,14 @@
 import express from 'express';
 import cors from 'cors';
 import { readFile, readdir } from 'node:fs/promises';
-import { exec } from 'node:child_process';
+import { exec, execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { join } from 'node:path';
 import { createServer } from 'node:http';
 import WebSocket, { WebSocketServer } from 'ws';
 
 const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 const WORKSPACE = process.env.OPENCLAW_WORKSPACE ?? '/home/tux/.openclaw/workspace';
 const REPO_ROOT = join(WORKSPACE, 'projects/mission-control');
 const app = express();
@@ -18,7 +19,7 @@ app.use(cors());
 app.use(express.json());
 
 // ---- Gateway proxy (avoids CORS) ----
-const GATEWAY_URL = process.env.VITE_GATEWAY_URL ?? 'http://localhost:18789';
+const GATEWAY_URL = process.env.VITE_GATEWAY_URL ?? 'http://100.90.181.128:18789';
 const GATEWAY_TOKEN = process.env.VITE_GATEWAY_TOKEN ?? '';
 
 function gatewayHeaders(extra?: Record<string, string>) {
@@ -217,19 +218,38 @@ app.post('/api/chat', async (req, res) => {
       res.status(400).json({ error: 'Missing message field' });
       return;
     }
-    const upstream = await fetch(`${GATEWAY_URL}/api/sessions/main/message`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(GATEWAY_TOKEN ? { Authorization: `Bearer ${GATEWAY_TOKEN}` } : {}),
-      },
-      body: JSON.stringify({ message }),
-    });
-    const body = await upstream.text();
-    res.status(upstream.status).type('application/json').send(body);
+
+    const { stdout } = await execFileAsync(
+      'openclaw',
+      ['agent', '--session-id', 'mission-control-chat', '--json', '-m', message],
+      { timeout: 60000 },
+    );
+
+    let content = '(no response)';
+    try {
+      const parsed = JSON.parse(stdout) as Record<string, unknown>;
+      // Try result.payloads[0].text
+      const result = parsed.result as Record<string, unknown> | undefined;
+      const payloads = result?.payloads as Array<Record<string, unknown>> | undefined;
+      if (payloads?.[0]?.text && typeof payloads[0].text === 'string') {
+        content = payloads[0].text;
+      } else if (typeof parsed.text === 'string') {
+        content = parsed.text;
+      } else if (typeof parsed.content === 'string') {
+        content = parsed.content;
+      } else if (typeof result?.text === 'string') {
+        content = result.text as string;
+      } else {
+        content = stdout.trim() || '(no response)';
+      }
+    } catch {
+      content = stdout.trim() || '(no response)';
+    }
+
+    res.json({ content, usage: null });
   } catch (err) {
-    const msg = err instanceof Error ? err.message : 'Proxy error';
-    res.status(502).json({ error: msg });
+    const msg = err instanceof Error ? err.message : 'Chat failed';
+    res.status(500).json({ error: msg });
   }
 });
 
@@ -434,40 +454,59 @@ app.get('/api/vitals', async (_req, res) => {
 // ---- Cron API (gateway proxy) ----
 app.get('/api/cron/jobs', async (_req, res) => {
   try {
-    const upstream = await fetch(`${GATEWAY_URL}/api/cron/jobs`, {
-      headers: gatewayHeaders(),
-    });
-    const body = await upstream.text();
-    res.status(upstream.status).type(upstream.headers.get('content-type') ?? 'application/json').send(body);
+    const raw = await readFile(join(process.env.HOME ?? '/home/tux', '.openclaw/cron/jobs.json'), 'utf-8');
+    const data = JSON.parse(raw) as { jobs: Array<Record<string, unknown>> };
+    res.json({ jobs: data.jobs ?? [] });
   } catch {
-    res.status(500).json({ error: 'Failed to list cron jobs' });
+    res.status(500).json({ error: 'Failed to read cron jobs' });
   }
 });
 
 app.post('/api/cron/jobs/:id/run', async (req, res) => {
   try {
-    const upstream = await fetch(`${GATEWAY_URL}/api/cron/jobs/${req.params.id}/run`, {
-      method: 'POST',
-      headers: gatewayHeaders({ 'Content-Type': 'application/json' }),
-    });
-    const body = await upstream.text();
-    res.status(upstream.status).type(upstream.headers.get('content-type') ?? 'application/json').send(body);
-  } catch {
-    res.status(500).json({ error: 'Failed to run job' });
+    const { stdout } = await execAsync(`openclaw cron run ${req.params.id}`);
+    res.json({ ok: true, output: stdout.trim() });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Failed to run job';
+    res.status(500).json({ error: msg });
   }
 });
 
 app.patch('/api/cron/jobs/:id', async (req, res) => {
   try {
-    const upstream = await fetch(`${GATEWAY_URL}/api/cron/jobs/${req.params.id}`, {
-      method: 'PATCH',
-      headers: gatewayHeaders({ 'Content-Type': 'application/json' }),
-      body: JSON.stringify(req.body ?? {}),
-    });
-    const body = await upstream.text();
-    res.status(upstream.status).type(upstream.headers.get('content-type') ?? 'application/json').send(body);
+    const enabled = (req.body as { enabled?: boolean }).enabled;
+    const flag = enabled ? '--enable' : '--disable';
+    const { stdout } = await execAsync(`openclaw cron edit ${req.params.id} ${flag}`);
+    res.json({ ok: true, output: stdout.trim() });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Failed to update job';
+    res.status(500).json({ error: msg });
+  }
+});
+
+// ---- Chat API (handled above) ----
+
+// ---- Missions API ----
+
+const MISSIONS_FILE = join(REPO_ROOT, 'data/missions.json');
+
+app.get('/api/missions', async (_req, res) => {
+  try {
+    const raw = await readFile(MISSIONS_FILE, 'utf-8');
+    res.json(JSON.parse(raw));
   } catch {
-    res.status(500).json({ error: 'Failed to update job' });
+    res.json([]);
+  }
+});
+
+app.put('/api/missions', async (req, res) => {
+  try {
+    const { writeFile, mkdir } = await import('node:fs/promises');
+    await mkdir(join(REPO_ROOT, 'data'), { recursive: true });
+    await writeFile(MISSIONS_FILE, JSON.stringify(req.body, null, 2));
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : 'Failed to save' });
   }
 });
 
@@ -503,6 +542,22 @@ app.get('/api/memory/:filename', async (req, res) => {
     res.json({ content });
   } catch {
     res.status(404).json({ error: 'File not found' });
+  }
+});
+
+// ---- Workspace Files API (Heartbeat, Rules, Soul) ----
+app.get('/api/workspace-file/:name', async (req, res) => {
+  const allowed = ['HEARTBEAT.md', 'AGENTS.md', 'SOUL.md'];
+  const name = req.params.name;
+  if (!allowed.includes(name)) {
+    res.status(400).json({ error: 'File not allowed' });
+    return;
+  }
+  try {
+    const content = await readFile(join(WORKSPACE, name), 'utf-8');
+    res.json({ content });
+  } catch {
+    res.json({ content: '' });
   }
 });
 
@@ -846,6 +901,14 @@ app.get('/health', (_req, res) => {
   res.json({ status: 'ok' });
 });
 
-server.listen(PORT, () => {
-  console.log(`Vitals server running on http://localhost:${PORT}`);
+// ---- Serve production build ----
+const DIST_DIR = join(REPO_ROOT, 'dist');
+app.use(express.static(DIST_DIR));
+// SPA fallback — serve index.html for non-API routes
+app.get('/{*path}', (_req, res) => {
+  res.sendFile(join(DIST_DIR, 'index.html'));
+});
+
+server.listen(PORT, '0.0.0.0', () => {
+  console.log(`Mission Control running on http://0.0.0.0:${PORT}`);
 });

@@ -395,7 +395,19 @@ body {
 }
 
 .chat-send-btn {
-  transition: all var(--transition-normal);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  border: none;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  user-select: none;
 }
 
 .chat-send-btn--active {
@@ -406,11 +418,37 @@ body {
 
 .chat-send-btn--active:hover {
   filter: brightness(1.15);
+  transform: scale(1.05);
+}
+
+.chat-send-btn--active:active {
+  transform: scale(0.92);
+  filter: brightness(0.9);
+  box-shadow: none;
 }
 
 .chat-send-btn--disabled {
   background: var(--bg-tertiary);
   color: var(--text-muted);
+  cursor: default;
+  opacity: 0.5;
+}
+
+.chat-send-btn--disabled:active {
+  transform: none;
+}
+
+/* Typing dots animation */
+.chat-typing-dots span {
+  animation: typingBlink 1.4s infinite;
+  opacity: 0.2;
+}
+.chat-typing-dots span:nth-child(2) { animation-delay: 0.2s; }
+.chat-typing-dots span:nth-child(3) { animation-delay: 0.4s; }
+
+@keyframes typingBlink {
+  0%, 100% { opacity: 0.2; }
+  50% { opacity: 1; }
 }
 
 .chat-connection-dot {
@@ -787,6 +825,40 @@ body {
   padding: 2px 8px;
   border-radius: 999px;
   font-size: 11px;
+}
+
+/* Mobile column tabs (hidden on desktop) */
+.mission-column-tabs {
+  display: none;
+  gap: 8px;
+  padding: 12px 16px 0;
+}
+
+.mission-column-tab {
+  flex: 1;
+  padding: 8px 12px;
+  min-height: 44px;
+  border-radius: 8px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  text-align: center;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.mission-column-tab--active {
+  background: var(--accent);
+  color: white;
+  border-color: var(--accent);
+}
+
+.mission-column-tab__count {
+  margin-left: 6px;
+  font-size: 11px;
+  opacity: 0.7;
 }
 
 .mission-column__list {
@@ -2458,8 +2530,121 @@ body {
   display: none;
 }
 
-/* === RESPONSIVE === */
+/* === BOTTOM NAV (hidden on desktop) === */
+.bottom-nav {
+  display: none;
+}
+
+/* === MOBILE HAMBURGER (hidden on desktop) === */
+.mobile-hamburger {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  background: none;
+  border: none;
+  color: var(--text-primary);
+  cursor: pointer;
+  border-radius: 8px;
+  -webkit-tap-highlight-color: transparent;
+}
+.mobile-hamburger:hover {
+  background: var(--bg-hover);
+}
+.mobile-hamburger:active {
+  background: var(--bg-hover);
+}
+
+/* Mobile-only subtitle */
+.header__subtitle-mobile {
+  display: none;
+}
+
+/* === RESPONSIVE — MOBILE ≤768px === */
 @media (max-width: 768px) {
+  /* --- Bottom navigation bar --- */
+  .bottom-nav {
+    display: flex;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 100;
+    background: var(--bg-secondary);
+    border-top: 1px solid var(--border);
+    padding: 4px 0 env(safe-area-inset-bottom, 8px);
+    justify-content: space-around;
+  }
+
+  .bottom-nav__item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    padding: 8px 12px;
+    min-width: 64px;
+    min-height: 44px;
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    font-size: 10px;
+    font-weight: 500;
+    cursor: pointer;
+    border-radius: 8px;
+    -webkit-tap-highlight-color: transparent;
+    transition: color var(--transition-fast);
+  }
+
+  .bottom-nav__item--active {
+    color: var(--accent);
+  }
+
+  .bottom-nav__item:active {
+    background: var(--bg-hover);
+  }
+
+  .bottom-nav__label {
+    font-size: 10px;
+    line-height: 1;
+  }
+
+  /* --- Hide top TabBar on mobile --- */
+  .tabbar {
+    display: none !important;
+  }
+
+  /* --- Mobile header --- */
+  .mobile-hamburger {
+    display: flex;
+  }
+
+  .header {
+    padding: 8px 12px;
+    gap: 8px;
+  }
+
+  .header__subtitle {
+    display: none;
+  }
+
+  .header__subtitle-mobile {
+    display: inline;
+    font-size: 1rem;
+    font-weight: 300;
+    letter-spacing: 0.1em;
+    color: var(--text-secondary);
+  }
+
+  .header__desktop-only {
+    display: none !important;
+  }
+
+  .theme-selector__label {
+    display: none;
+  }
+
+  /* --- Sidebar overlay --- */
   .sidebar-toggle-btn {
     display: flex;
   }
@@ -2470,38 +2655,158 @@ body {
     left: 0;
     bottom: 0;
     z-index: 50;
-    box-shadow: 4px 0 24px rgba(0, 0, 0, 0.4);
+    width: 280px;
+    box-shadow: 4px 0 24px rgba(0, 0, 0, 0.6);
+    background: var(--bg-primary);
   }
 
-  .header {
-    flex-wrap: wrap;
-    gap: 8px;
+  .sidebar--collapsed {
+    display: none;
+  }
+
+  /* --- VitalsBar mobile --- */
+  .vitals-bar {
+    margin-bottom: 60px; /* space for bottom nav */
+  }
+
+  .vitals-actions {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    flex-wrap: nowrap;
+  }
+  .vitals-actions::-webkit-scrollbar { display: none; }
+
+  .vitals-action-btn span:not(.sr-only) {
+    /* Hide labels, keep icons */
+  }
+
+  .vitals-action-btn {
+    min-width: 44px;
+    min-height: 44px;
+    justify-content: center;
+    padding: 8px;
+    flex-shrink: 0;
+  }
+
+  /* Hide action button labels on mobile */
+  .vitals-action-btn {
+    font-size: 0;
+    gap: 0;
+  }
+  .vitals-action-btn svg {
+    width: 16px;
+    height: 16px;
   }
 
   .vitals-meters {
-    flex-direction: column;
-    gap: 8px;
-    align-items: flex-start;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    flex-wrap: nowrap;
+    padding: 8px 12px;
+    gap: 12px;
+  }
+  .vitals-meters::-webkit-scrollbar { display: none; }
+
+  .vitals-meters > div {
+    flex-wrap: nowrap;
+    gap: 12px;
   }
 
-  .cal-form__grid {
+  .vitals-summary {
+    flex-shrink: 0;
+  }
+
+  /* --- Chat view mobile --- */
+  #panel-chat {
+    padding-bottom: 0;
+  }
+
+  #panel-chat .chat-messages {
+    padding: 8px;
+  }
+
+  #panel-chat .chat-bubble {
+    max-width: 92%;
+  }
+
+  #panel-chat .chat-input-wrap {
+    padding: 8px;
+    margin-bottom: 64px;
+  }
+
+  /* --- Mission Board mobile --- */
+  .mission-column-tabs {
+    display: flex;
+  }
+
+  .mission-column--hidden-mobile {
+    display: none;
+  }
+
+  .mission-columns {
     grid-template-columns: 1fr;
+    padding: 12px;
+  }
+
+  .mission-card {
+    min-height: 44px;
+  }
+
+  .board__header {
+    padding: 12px;
+  }
+
+  .mission-form {
+    padding: 12px;
   }
 
   .mission-form__grid {
     grid-template-columns: 1fr;
   }
 
+  /* Mobile status buttons on mission cards */
+  .mission-card__footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  /* --- Idea Board mobile --- */
   .idea-session-cards {
     grid-template-columns: 1fr;
   }
-}
 
-@media (max-width: 640px) {
-  .mission-columns {
-    grid-template-columns: 1fr;
+  .idea-filters {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    flex-wrap: nowrap;
+    padding: 8px 12px;
+  }
+  .idea-filters::-webkit-scrollbar { display: none; }
+
+  .idea-filter-btn {
+    flex-shrink: 0;
+    min-height: 44px;
+    min-width: 44px;
   }
 
+  .idea-list {
+    padding: 12px;
+  }
+
+  .idea-card {
+    margin-bottom: 8px;
+  }
+
+  .creative-time-btn {
+    min-height: 44px;
+    padding: 8px 12px;
+  }
+
+  /* --- Calendar mobile --- */
   .cal-body {
     flex-direction: column;
   }
@@ -2515,7 +2820,7 @@ body {
   }
 
   .cal-cell {
-    min-height: 48px;
+    min-height: 44px;
     padding: 4px 2px;
   }
 
@@ -2523,4 +2828,67 @@ body {
     min-width: 140px;
     font-size: 0.95rem;
   }
+
+  .cal-grid-wrap {
+    padding: 8px 12px;
+  }
+
+  .cal-form__grid {
+    grid-template-columns: 1fr;
+  }
+
+  .cal-today-btn,
+  .board__action-btn {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  /* --- Touch targets — all buttons minimum 44px --- */
+  button,
+  [role="tab"],
+  [role="button"],
+  .tab-btn,
+  .panel-icon-btn,
+  .mission-card__delete,
+  .idea-star-btn,
+  .idea-dismiss-btn,
+  .cal-nav__btn {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  /* --- App shell padding for bottom nav --- */
+  .app-shell > .flex-1 {
+    margin-bottom: 0;
+  }
+
+  /* Ensure main content doesn't hide behind bottom nav */
+  .app-shell {
+    padding-bottom: 60px;
+  }
+}
+
+/* Sidebar collapsed */
+.sidebar--collapsed {
+  width: 48px;
+  min-width: 48px;
+  transition: width 0.2s ease;
+  overflow: hidden;
+}
+
+.sidebar--collapsed:hover {
+  background: var(--bg-secondary);
+}
+
+.agent-group__header {
+  transition: opacity 0.15s ease;
+}
+
+.agent-group__header:hover {
+  background: var(--bg-tertiary);
+}
+
+.sidebar__close-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
 }

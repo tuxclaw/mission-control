@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 
-const VITALS_API = import.meta.env.VITE_VITALS_API_URL ?? 'http://localhost:3851';
+const VITALS_API = import.meta.env.VITE_VITALS_API_URL ?? '';
 
 interface GitStatus {
   entries: string[];

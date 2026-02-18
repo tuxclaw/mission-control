@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import type { VitalsSimple } from '../types';
 
-const VITALS_API = import.meta.env.VITE_VITALS_API_URL ?? 'http://localhost:3851';
+const VITALS_API = import.meta.env.VITE_VITALS_API_URL ?? '';
 const POLL_MS = Number(import.meta.env.VITE_VITALS_POLL_MS ?? 3000);
 const POLL_MS_HIDDEN = 30000; // 30s when tab not visible
 

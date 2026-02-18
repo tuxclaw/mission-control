@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import type { Agent } from '../types';
 
-const VITALS_API = import.meta.env.VITE_VITALS_API_URL ?? 'http://localhost:3851';
+const VITALS_API = import.meta.env.VITE_VITALS_API_URL ?? '';
 
 const placeholderAgents: Agent[] = [
   { id: 'andy-main', name: 'Andy', model: 'opus', status: 'active', role: 'Main Agent', sessionAge: '2h 14m' },

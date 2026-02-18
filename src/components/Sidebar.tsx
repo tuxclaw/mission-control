@@ -1,5 +1,5 @@
-import { memo } from 'react';
-import { Bot, ChevronRight } from 'lucide-react';
+import { memo, useState } from 'react';
+import { Bot, ChevronRight, ChevronDown, X } from 'lucide-react';
 import type { Agent, AgentStatus } from '../types';
 import { useAgents } from '../hooks/useAgents';
 
@@ -56,34 +56,126 @@ const AgentItem = memo(function AgentItem({ agent, selected, onSelect }: AgentIt
   );
 });
 
+interface AgentGroupProps {
+  label: string;
+  agents: Agent[];
+  count: number;
+  selectedAgent: string;
+  onSelectAgent: (id: string) => void;
+  defaultOpen: boolean;
+  statusColor: string;
+}
+
+function AgentGroup({ label, agents, count, selectedAgent, onSelectAgent, defaultOpen, statusColor }: AgentGroupProps) {
+  const [open, setOpen] = useState(defaultOpen);
+
+  if (count === 0) return null;
+
+  return (
+    <div className="agent-group">
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="agent-group__header w-full flex items-center justify-between px-4 py-2 text-xs font-semibold uppercase tracking-wider cursor-pointer hover:opacity-80"
+        aria-expanded={open}
+        aria-label={`${label} agents, ${count}`}
+      >
+        <div className="flex items-center gap-2">
+          {open ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+          <span>{label}</span>
+        </div>
+        <span className="px-1.5 py-0.5 rounded-full text-[10px]" style={{ color: statusColor }}>{count}</span>
+      </button>
+      {open && (
+        <div className="px-2 pb-1 flex flex-col gap-1" role="listbox" aria-label={`${label} agent sessions`}>
+          {agents.map((agent: Agent) => (
+            <AgentItem key={agent.id} agent={agent} selected={agent.id === selectedAgent} onSelect={onSelectAgent} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 interface SidebarProps {
   selectedAgent: string;
   onSelectAgent: (id: string) => void;
+  collapsed: boolean;
+  onToggle: () => void;
 }
 
-export function Sidebar({ selectedAgent, onSelectAgent }: SidebarProps) {
+export function Sidebar({ selectedAgent, onSelectAgent, collapsed, onToggle }: SidebarProps) {
   const { agents } = useAgents();
   const activeCount = agents.filter(a => a.status === 'active').length;
   const idleCount = agents.filter(a => a.status === 'idle').length;
   const dormantCount = agents.filter(a => a.status === 'dormant').length;
 
+  if (collapsed) {
+    return (
+      <aside
+        className="sidebar sidebar--collapsed flex flex-col items-center border-r cursor-pointer"
+        role="complementary"
+        aria-label="Agent list (collapsed)"
+        onClick={onToggle}
+        title="Expand agents"
+      >
+        <div className="py-3 px-1">
+          <ChevronRight size={14} style={{ color: 'var(--text-muted)' }} />
+        </div>
+        {agents.filter(a => a.status === 'active').map(agent => (
+          <div
+            key={agent.id}
+            className="agent-avatar--collapsed w-8 h-8 rounded-lg flex items-center justify-center my-1"
+            title={agent.name}
+            style={{ background: 'var(--bg-tertiary)' }}
+          >
+            <Bot size={14} style={{ color: 'var(--accent-primary)' }} />
+          </div>
+        ))}
+      </aside>
+    );
+  }
+
   return (
     <aside className="sidebar w-64 flex flex-col border-r overflow-hidden" role="complementary" aria-label="Agent list">
       <div className="sidebar__header px-4 py-3 border-b flex items-center justify-between">
         <span className="sidebar__label text-xs font-semibold uppercase tracking-wider">Agents</span>
-        <span className="sidebar__count text-xs px-2 py-0.5 rounded-full">{activeCount} active</span>
+        <button
+          onClick={onToggle}
+          className="sidebar__close-btn p-1.5 rounded-lg cursor-pointer"
+          aria-label="Collapse sidebar"
+          title="Collapse sidebar"
+          style={{ color: 'var(--text-muted)' }}
+        >
+          <X size={16} />
+        </button>
       </div>
-
-      <div className="flex-1 overflow-y-auto p-2 flex flex-col gap-1" role="listbox" aria-label="Agent sessions">
-        {agents.map((agent: Agent) => (
-          <AgentItem
-            key={agent.id}
-            agent={agent}
-            selected={agent.id === selectedAgent}
-            onSelect={onSelectAgent}
-          />
-        ))}
-      </div>
+      <AgentGroup
+        label="Active"
+        agents={agents.filter(a => a.status === 'active')}
+        count={activeCount}
+        selectedAgent={selectedAgent}
+        onSelectAgent={onSelectAgent}
+        defaultOpen={true}
+        statusColor="var(--green)"
+      />
+      <AgentGroup
+        label="Idle"
+        agents={agents.filter(a => a.status === 'idle')}
+        count={idleCount}
+        selectedAgent={selectedAgent}
+        onSelectAgent={onSelectAgent}
+        defaultOpen={true}
+        statusColor="var(--yellow)"
+      />
+      <AgentGroup
+        label="Dormant"
+        agents={agents.filter(a => a.status === 'dormant')}
+        count={dormantCount}
+        selectedAgent={selectedAgent}
+        onSelectAgent={onSelectAgent}
+        defaultOpen={false}
+        statusColor="var(--text-muted)"
+      />
 
       <div className="sidebar__footer p-3 border-t">
         <div className="flex justify-between text-xs">

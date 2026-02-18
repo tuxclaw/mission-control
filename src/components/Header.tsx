@@ -1,9 +1,14 @@
 import { useState, useRef, useEffect } from 'react';
-import { Zap, Wifi, User, Palette, ChevronDown } from 'lucide-react';
+import { Zap, Wifi, User, Palette, ChevronDown, Menu } from 'lucide-react';
 import { useClock } from '../hooks/useClock';
 import { useTheme } from '../hooks/useTheme';
 
-export function Header() {
+interface HeaderProps {
+  onToggleSidebar?: () => void;
+  sidebarOpen?: boolean;
+}
+
+export function Header({ onToggleSidebar, sidebarOpen }: HeaderProps) {
   const { clock, date } = useClock();
   const { theme, setTheme, themes } = useTheme();
   const [open, setOpen] = useState(false);
@@ -24,18 +29,31 @@ export function Header() {
   return (
     <header className="header flex items-center justify-between px-5 py-3 border-b" role="banner">
       <div className="flex items-center gap-2">
+        {/* Mobile hamburger */}
+        {onToggleSidebar && (
+          <button
+            type="button"
+            className="mobile-hamburger"
+            onClick={onToggleSidebar}
+            aria-label={sidebarOpen ? 'Close sidebar' : 'Open sidebar'}
+            aria-expanded={sidebarOpen}
+          >
+            <Menu size={20} />
+          </button>
+        )}
         <Zap size={20} className="header__logo" aria-hidden="true" />
         <span className="header__logo text-lg font-bold tracking-wide">ANDY</span>
         <span className="header__subtitle text-lg font-light tracking-widest">MISSION CONTROL</span>
+        <span className="header__subtitle-mobile">MC</span>
       </div>
 
       <div className="flex items-center gap-6">
-        <div className="header__status-badge glow-green flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium" role="status" aria-label="Connection status: connected">
+        <div className="header__status-badge glow-green flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium header__desktop-only" role="status" aria-label="Connection status: connected">
           <Wifi size={12} aria-hidden="true" />
           Connected
         </div>
 
-        <div className="text-right" aria-label={`Current time: ${clock}, ${date}`}>
+        <div className="text-right header__desktop-only" aria-label={`Current time: ${clock}, ${date}`}>
           <div className="header__clock text-sm font-mono font-semibold">{clock}</div>
           <div className="header__date text-xs">{date} · PST</div>
         </div>
@@ -70,7 +88,7 @@ export function Header() {
           )}
         </div>
 
-        <div className="header__divider flex items-center gap-2 pl-4 border-l">
+        <div className="header__divider flex items-center gap-2 pl-4 border-l header__desktop-only">
           <div className="header__avatar w-8 h-8 rounded-full flex items-center justify-center">
             <User size={14} className="header__avatar-icon" aria-hidden="true" />
           </div>

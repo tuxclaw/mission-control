@@ -4,7 +4,7 @@ import type { BrainstormIdea, IdeaFilter, Mission } from '../types';
 
 const IDEA_STORAGE_KEY = 'mission-control-brainstorm-ideas';
 const MISSION_STORAGE_KEY = 'mission-control-missions';
-const API_BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:3851';
+const API_BASE = import.meta.env.VITE_API_URL ?? '';
 
 function loadIdeas(): BrainstormIdea[] {
   if (typeof window === 'undefined') return [];

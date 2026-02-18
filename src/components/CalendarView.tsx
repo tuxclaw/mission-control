@@ -3,7 +3,7 @@ import { ChevronLeft, ChevronRight, Plus, Trash2, Clock, X, CalendarDays } from 
 import type { CalendarEvent, CalendarEventColor, CronJob } from '../types';
 import { ConfirmDialog } from './ConfirmDialog';
 
-const VITALS_API = import.meta.env.VITE_VITALS_API_URL ?? 'http://localhost:3851';
+const VITALS_API = import.meta.env.VITE_VITALS_API_URL ?? '';
 const STORAGE_KEY = 'mission-control-calendar-events';
 const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const;
 const COLOR_OPTIONS: CalendarEventColor[] = ['accent', 'green', 'yellow', 'red', 'purple'];

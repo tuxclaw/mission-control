@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import type { CronJob } from '../types';
 
-const VITALS_API = import.meta.env.VITE_VITALS_API_URL ?? 'http://localhost:3851';
+const VITALS_API = import.meta.env.VITE_VITALS_API_URL ?? '';
 const POLL_MS = 15000;
 
 interface UseCronReturn {

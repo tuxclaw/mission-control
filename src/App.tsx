@@ -3,6 +3,7 @@ import { ErrorBoundary } from './components/ErrorBoundary';
 import { Header } from './components/Header';
 import { useTheme } from './hooks/useTheme';
 import { TabBar } from './components/TabBar';
+import { BottomNav } from './components/BottomNav';
 import { Sidebar } from './components/Sidebar';
 import { ChatView } from './components/ChatView';
 import { VitalsBar } from './components/VitalsBar';
@@ -12,7 +13,7 @@ import { CalendarView } from './components/CalendarView';
 import type { TabId } from './types';
 
 export default function App() {
-  useTheme(); // Initialize theme on mount
+  useTheme();
   const [activeTab, setActiveTab] = useState<TabId>('chat');
   const [selectedAgent, setSelectedAgent] = useState('andy-main');
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -22,10 +23,10 @@ export default function App() {
   return (
     <ErrorBoundary>
       <div className="app-shell h-screen flex flex-col">
-        <Header />
+        <Header onToggleSidebar={toggleSidebar} sidebarOpen={sidebarOpen} />
         <TabBar activeTab={activeTab} onTabChange={setActiveTab} sidebarOpen={sidebarOpen} onToggleSidebar={toggleSidebar} />
         <div className="flex-1 flex min-h-0">
-          {sidebarOpen && <Sidebar selectedAgent={selectedAgent} onSelectAgent={setSelectedAgent} />}
+          {sidebarOpen && <Sidebar selectedAgent={selectedAgent} onSelectAgent={setSelectedAgent} collapsed={false} onToggle={toggleSidebar} />}
           <main className="flex-1 flex flex-col min-h-0">
             {activeTab === 'chat' && <ChatView />}
             {activeTab === 'missions' && <MissionBoard />}
@@ -34,6 +35,7 @@ export default function App() {
           </main>
         </div>
         <VitalsBar />
+        <BottomNav activeTab={activeTab} onTabChange={setActiveTab} />
       </div>
     </ErrorBoundary>
   );

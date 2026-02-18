@@ -5,6 +5,7 @@ import { useAgents } from '../hooks/useAgents';
 import { ConfirmDialog } from './ConfirmDialog';
 
 const STORAGE_KEY = 'mission-control-missions';
+const API = import.meta.env.VITE_VITALS_API_URL ?? '';
 
 const statusOrder: MissionStatus[] = ['todo', 'in-progress', 'done'];
 
@@ -37,7 +38,7 @@ function formatDate(value: string): string {
   return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
-function loadMissions(): Mission[] {
+function loadMissionsLocal(): Mission[] {
   if (typeof window === 'undefined') return [];
   const raw = window.localStorage.getItem(STORAGE_KEY);
   if (!raw) return [];
@@ -50,15 +51,46 @@ function loadMissions(): Mission[] {
   }
 }
 
+async function loadMissionsFromApi(): Promise<Mission[] | null> {
+  try {
+    const res = await fetch(`${API}/api/missions`);
+    if (!res.ok) return null;
+    const data = await res.json();
+    return Array.isArray(data) ? data as Mission[] : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveMissionsToApi(missions: Mission[]): void {
+  fetch(`${API}/api/missions`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(missions),
+  }).catch(() => {/* best-effort */});
+}
+
 export function MissionBoard() {
   const { agents } = useAgents();
-  const [missions, setMissions] = useState<Mission[]>(() => loadMissions());
+  const [missions, setMissions] = useState<Mission[]>(() => loadMissionsLocal());
+  const initialLoadDone = useRef(false);
+
+  useEffect(() => {
+    if (initialLoadDone.current) return;
+    initialLoadDone.current = true;
+    loadMissionsFromApi().then(apiMissions => {
+      if (apiMissions && apiMissions.length > 0) {
+        setMissions(prev => prev.length > 0 ? prev : apiMissions);
+      }
+    });
+  }, []);
   const [isAdding, setIsAdding] = useState(false);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [priority, setPriority] = useState<MissionPriority>('medium');
   const [assigneeId, setAssigneeId] = useState('unassigned');
   const [deleteTarget, setDeleteTarget] = useState<Mission | null>(null);
+  const [mobileColumn, setMobileColumn] = useState<MissionStatus>('todo');
 
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [dragOverColumn, setDragOverColumn] = useState<MissionStatus | null>(null);
@@ -86,6 +118,7 @@ export function MissionBoard() {
   useEffect(() => {
     if (typeof window === 'undefined') return;
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(missions));
+    saveMissionsToApi(missions);
   }, [missions]);
 
   const missionsByStatus = useMemo(() => {
@@ -328,11 +361,25 @@ export function MissionBoard() {
         </form>
       )}
 
+      <div className="mission-column-tabs">
+        {statusOrder.map(status => (
+          <button
+            key={status}
+            type="button"
+            className={`mission-column-tab${mobileColumn === status ? ' mission-column-tab--active' : ''}`}
+            onClick={() => setMobileColumn(status)}
+          >
+            {statusLabels[status]}
+            <span className="mission-column-tab__count">{missionsByStatus[status].length}</span>
+          </button>
+        ))}
+      </div>
+
       <div className="mission-columns flex-1 overflow-y-auto px-6 py-4">
         {statusOrder.map(status => (
           <section
             key={status}
-            className={`mission-column${dragOverColumn === status ? ' mission-column--drag-over' : ''}`}
+            className={`mission-column${dragOverColumn === status ? ' mission-column--drag-over' : ''}${mobileColumn !== status ? ' mission-column--hidden-mobile' : ''}`}
             aria-label={statusLabels[status]}
             aria-dropeffect="move"
             onDragOver={event => handleColumnDragOver(event, status)}
