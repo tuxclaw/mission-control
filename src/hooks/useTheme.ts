@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { themes, themeMap, type ThemeId } from '../themes';
 
-const STORAGE_KEY = 'mission-control-theme';
+const STORAGE_KEY = 'andys-overview-theme';
 
 function applyTheme(id: ThemeId): void {
   const theme = themeMap.get(id);

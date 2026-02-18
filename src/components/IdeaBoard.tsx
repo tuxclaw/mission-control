@@ -2,8 +2,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Lightbulb, Star, X, ArrowUpRight, Sparkles, Loader2, Filter } from 'lucide-react';
 import type { BrainstormIdea, IdeaFilter, Mission } from '../types';
 
-const IDEA_STORAGE_KEY = 'mission-control-brainstorm-ideas';
-const MISSION_STORAGE_KEY = 'mission-control-missions';
+const IDEA_STORAGE_KEY = 'andys-overview-brainstorm-ideas';
+const MISSION_STORAGE_KEY = 'andys-overview-missions';
 const API_BASE = import.meta.env.VITE_API_URL ?? '';
 
 function loadIdeas(): BrainstormIdea[] {

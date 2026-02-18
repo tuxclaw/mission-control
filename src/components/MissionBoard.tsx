@@ -4,7 +4,7 @@ import type { Mission, MissionPriority, MissionStatus, Agent } from '../types';
 import { useAgents } from '../hooks/useAgents';
 import { ConfirmDialog } from './ConfirmDialog';
 
-const STORAGE_KEY = 'mission-control-missions';
+const STORAGE_KEY = 'andys-overview-missions';
 const API = import.meta.env.VITE_VITALS_API_URL ?? '';
 
 const statusOrder: MissionStatus[] = ['todo', 'in-progress', 'done'];

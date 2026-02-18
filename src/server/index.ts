@@ -10,7 +10,7 @@ import WebSocket, { WebSocketServer } from 'ws';
 const execAsync = promisify(exec);
 const execFileAsync = promisify(execFile);
 const WORKSPACE = process.env.OPENCLAW_WORKSPACE ?? '/home/tux/.openclaw/workspace';
-const REPO_ROOT = join(WORKSPACE, 'projects/mission-control');
+const REPO_ROOT = join(WORKSPACE, 'projects/andys-overview');
 const app = express();
 const PORT = Number(process.env.VITALS_PORT ?? 3851);
 const server = createServer(app);
@@ -221,7 +221,7 @@ app.post('/api/chat', async (req, res) => {
 
     const { stdout } = await execFileAsync(
       'openclaw',
-      ['agent', '--session-id', 'mission-control-chat', '--json', '-m', message],
+      ['agent', '--session-id', 'andys-overview-chat', '--json', '-m', message],
       { timeout: 60000 },
     );
 
@@ -562,7 +562,7 @@ app.get('/api/workspace-file/:name', async (req, res) => {
 });
 
 // ---- Ideas API ----
-const IDEAS_FILE = join(WORKSPACE, 'projects/mission-control/data/ideas.json');
+const IDEAS_FILE = join(WORKSPACE, 'projects/andys-overview/data/ideas.json');
 
 async function loadIdeasFile(): Promise<unknown[]> {
   try {
@@ -838,7 +838,7 @@ app.post('/api/git/commit', async (req, res) => {
 });
 
 // ---- Calendar Events API ----
-const EVENTS_FILE = join(WORKSPACE, 'projects/mission-control/data/events.json');
+const EVENTS_FILE = join(WORKSPACE, 'projects/andys-overview/data/events.json');
 
 async function loadEventsFile(): Promise<unknown[]> {
   try {
