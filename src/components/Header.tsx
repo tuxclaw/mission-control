@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Zap, Wifi, User, Palette, ChevronDown, Menu } from 'lucide-react';
+import { Wifi, User, Palette, ChevronDown, Menu } from 'lucide-react';
 import { useClock } from '../hooks/useClock';
 import { useTheme } from '../hooks/useTheme';
 
@@ -41,10 +41,10 @@ export function Header({ onToggleSidebar, sidebarOpen }: HeaderProps) {
             <Menu size={20} />
           </button>
         )}
-        <Zap size={20} className="header__logo" aria-hidden="true" />
-        <span className="header__logo text-lg font-bold tracking-wide">ANDY</span>
-        <span className="header__subtitle text-lg font-light tracking-widest">ANDY'S OVERVIEW</span>
-        <span className="header__subtitle-mobile">AO</span>
+        <img src="/ao-logo.png" alt="Andy's Overview" className="header__logo-img" style={{ height: '36px', width: '36px', borderRadius: '6px' }} />
+        <span className="header__subtitle-mobile">
+          <img src="/ao-logo.png" alt="AO" style={{ height: '28px', width: '28px', borderRadius: '4px' }} />
+        </span>
       </div>
 
       <div className="flex items-center gap-6">
