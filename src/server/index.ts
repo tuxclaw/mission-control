@@ -910,5 +910,5 @@ app.get('/{*path}', (_req, res) => {
 });
 
 server.listen(PORT, '0.0.0.0', () => {
-  console.log(`Mission Control running on http://0.0.0.0:${PORT}`);
+  console.log(`Andy's Overview running on http://0.0.0.0:${PORT}`);
 });

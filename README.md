@@ -1,4 +1,4 @@
-# Mission Control 🚀
+# Andy's Overview ⚡
 
 A sleek, dark-themed dashboard for managing AI agents, missions, ideas, and schedules — built as the command center for [OpenClaw](https://github.com/tuxclaw/openclaw).
 

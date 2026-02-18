@@ -43,8 +43,8 @@ export function Header({ onToggleSidebar, sidebarOpen }: HeaderProps) {
         )}
         <Zap size={20} className="header__logo" aria-hidden="true" />
         <span className="header__logo text-lg font-bold tracking-wide">ANDY</span>
-        <span className="header__subtitle text-lg font-light tracking-widest">MISSION CONTROL</span>
-        <span className="header__subtitle-mobile">MC</span>
+        <span className="header__subtitle text-lg font-light tracking-widest">ANDY'S OVERVIEW</span>
+        <span className="header__subtitle-mobile">AO</span>
       </div>
 
       <div className="flex items-center gap-6">
