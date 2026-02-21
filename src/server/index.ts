@@ -169,6 +169,51 @@ function extractModelName(model?: string): string {
   return parts[parts.length - 1] || trimmed;
 }
 
+function extractPrimaryModel(data: unknown): string | null {
+  if (!data || typeof data !== 'object') return null;
+  const record = data as Record<string, unknown>;
+  const candidates: Array<unknown> = [
+    record.primary,
+    record.model,
+    record.current,
+    record.active,
+    (record.models as Record<string, unknown> | undefined)?.primary,
+    (record.models as Record<string, unknown> | undefined)?.current,
+    (record.models as Record<string, unknown> | undefined)?.active,
+    (record.defaults as Record<string, unknown> | undefined)?.primary,
+    (record.defaults as Record<string, unknown> | undefined)?.model,
+  ];
+  for (const candidate of candidates) {
+    if (typeof candidate === 'string' && candidate.trim()) {
+      return candidate.trim();
+    }
+  }
+  const models = record.models;
+  if (Array.isArray(models)) {
+    const active = models.find((m) => (m as Record<string, unknown>)?.active === true)
+      ?? models.find((m) => (m as Record<string, unknown>)?.primary === true);
+    const activeModel = (active as Record<string, unknown> | undefined)?.model;
+    if (typeof activeModel === 'string' && activeModel.trim()) return activeModel.trim();
+  }
+  return null;
+}
+
+async function getPrimaryModel(): Promise<string | null> {
+  try {
+    const { stdout } = await execFileAsync('openclaw', ['models', 'status', '--json'], { timeout: 8000 });
+    const parsed = JSON.parse(stdout) as Record<string, unknown>;
+    return extractPrimaryModel(parsed);
+  } catch {
+    try {
+      const { stdout } = await execFileAsync('openclaw', ['models', 'status'], { timeout: 8000 });
+      const match = stdout.match(/(?:primary|current|active)\s*:\s*([^\s]+)/i);
+      return match?.[1] ?? null;
+    } catch {
+      return null;
+    }
+  }
+}
+
 function formatSessionAge(createdAt?: string): string | undefined {
   if (!createdAt) return undefined;
   const createdMs = new Date(createdAt).getTime();
@@ -249,6 +294,44 @@ app.post('/api/chat', async (req, res) => {
     res.json({ content, usage: null });
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'Chat failed';
+    res.status(500).json({ error: msg });
+  }
+});
+
+// ---- Model Switcher ----
+const ALLOWED_MODELS = new Set([
+  'anthropic/claude-opus-4-6',
+  'openai/gpt-5.2',
+  'google/gemini-2.5-pro',
+  'ollama/qwen3:30b-a3b',
+]);
+
+app.get('/api/models/status', async (_req, res) => {
+  try {
+    const model = await getPrimaryModel();
+    res.json({ model: model ?? 'unknown' });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Failed to read model status';
+    res.status(500).json({ error: msg });
+  }
+});
+
+app.post('/api/models/set', async (req, res) => {
+  try {
+    const { model } = req.body as { model?: string };
+    if (!model || typeof model !== 'string') {
+      res.status(400).json({ error: 'Missing model' });
+      return;
+    }
+    if (!ALLOWED_MODELS.has(model)) {
+      res.status(400).json({ error: `Model not allowed: ${model}` });
+      return;
+    }
+    await execFileAsync('openclaw', ['models', 'set', model], { timeout: 15000 });
+    const current = await getPrimaryModel();
+    res.json({ ok: true, model: current ?? model });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Failed to set model';
     res.status(500).json({ error: msg });
   }
 });

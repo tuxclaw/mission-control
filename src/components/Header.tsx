@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { Wifi, User, Palette, ChevronDown, Menu } from 'lucide-react';
 import { useClock } from '../hooks/useClock';
 import { useTheme } from '../hooks/useTheme';
+import { ModelSwitcher } from './ModelSwitcher';
 
 interface HeaderProps {
   onToggleSidebar?: () => void;
@@ -57,6 +58,8 @@ export function Header({ onToggleSidebar, sidebarOpen }: HeaderProps) {
           <div className="header__clock text-sm font-mono font-semibold">{clock}</div>
           <div className="header__date text-xs">{date} · PST</div>
         </div>
+
+        <ModelSwitcher />
 
         {/* Theme selector */}
         <div className="theme-selector" ref={dropdownRef}>
