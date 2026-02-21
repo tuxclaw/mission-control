@@ -4,9 +4,11 @@ import type { Agent } from '../types';
 const VITALS_API = import.meta.env.VITE_VITALS_API_URL ?? '';
 
 const placeholderAgents: Agent[] = [
-  { id: 'andy-main', name: 'Andy', model: 'opus', status: 'active', role: 'Main Agent', sessionAge: '2h 14m' },
-  { id: 'andy-scout', name: 'Scout', model: 'sonnet', status: 'idle', role: 'Research', sessionAge: '45m' },
-  { id: 'andy-coder', name: 'Builder', model: 'sonnet', status: 'dormant', role: 'Code Gen' },
+  { id: 'andy-main', name: 'Andy ⚡', model: 'opus', status: 'active', role: 'Orchestrator' },
+  { id: 'buzz', name: 'Buzz 🚀', model: 'codex', status: 'idle', role: 'Coding Agent' },
+  { id: 'woody', name: 'Woody 🤠', model: 'codex', status: 'idle', role: 'Coding Agent' },
+  { id: 'sarge', name: 'Sarge 🎖️', model: 'opus', status: 'idle', role: 'Code Review' },
+  { id: 'jessie', name: 'Jessie 🔍', model: 'sonnet', status: 'idle', role: 'Research' },
 ];
 
 interface UseAgentsResult {
