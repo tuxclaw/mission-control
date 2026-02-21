@@ -329,6 +329,27 @@ app.post('/api/models/set', async (req, res) => {
       res.status(400).json({ error: `Model not allowed: ${model}` });
       return;
     }
+    // Pre-flight: ensure Ollama container is running for local models
+    if (model.startsWith('ollama/')) {
+      try {
+        const { stdout: status } = await execFileAsync('systemctl', ['--user', 'is-active', 'ollama-rocm.service'], { timeout: 5000 });
+        if (status.trim() !== 'active') {
+          await execFileAsync('systemctl', ['--user', 'start', 'ollama-rocm.service'], { timeout: 15000 });
+          // Give Ollama a moment to initialize
+          await new Promise((r) => setTimeout(r, 2000));
+        }
+      } catch {
+        // Service not active — try starting it
+        try {
+          await execFileAsync('systemctl', ['--user', 'start', 'ollama-rocm.service'], { timeout: 15000 });
+          await new Promise((r) => setTimeout(r, 2000));
+        } catch (startErr) {
+          const msg = startErr instanceof Error ? startErr.message : 'Failed to start Ollama';
+          res.status(500).json({ error: `Ollama pre-flight failed: ${msg}` });
+          return;
+        }
+      }
+    }
     await execFileAsync('openclaw', ['models', 'set', model], { timeout: 15000 });
     const current = await getPrimaryModel();
     res.json({ ok: true, model: current ?? model });
