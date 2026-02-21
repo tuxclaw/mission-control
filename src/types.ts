@@ -33,7 +33,26 @@ export interface VitalsSimple {
   gpu: number;
 }
 
-export type TabId = 'chat' | 'missions' | 'ideas' | 'calendar';
+export type TabId = 'chat' | 'missions' | 'ideas' | 'calendar' | 'packages';
+
+export type PackageStatus = 'current' | 'outdated' | 'missing' | 'beta';
+
+export interface PackageInfo {
+  name: string;
+  rawhide: string;
+  stable: string;
+  status: PackageStatus;
+}
+
+export interface PackageGroup {
+  name: string;
+  packages: PackageInfo[];
+}
+
+export interface PackagesData {
+  groups: PackageGroup[];
+  lastUpdated: string;
+}
 
 export interface CronJob {
   id: string;

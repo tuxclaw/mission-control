@@ -10,6 +10,7 @@ import { VitalsBar } from './components/VitalsBar';
 import { MissionBoard } from './components/MissionBoard';
 import { IdeaBoard } from './components/IdeaBoard';
 import { CalendarView } from './components/CalendarView';
+import { PackagesView } from './components/PackagesView';
 import type { TabId } from './types';
 
 export default function App() {
@@ -32,6 +33,7 @@ export default function App() {
             {activeTab === 'missions' && <MissionBoard />}
             {activeTab === 'ideas' && <IdeaBoard />}
             {activeTab === 'calendar' && <CalendarView />}
+            {activeTab === 'packages' && <PackagesView />}
           </main>
         </div>
         <VitalsBar />

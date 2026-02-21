@@ -2892,3 +2892,145 @@ body {
   background: var(--bg-hover);
   color: var(--text-primary);
 }
+
+/* === PACKAGES TABLE === */
+.pkg-content {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-bright) transparent;
+}
+
+.pkg-table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.pkg-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.pkg-th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  font-weight: 600;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 10px 14px;
+  text-align: left;
+  border-bottom: 1px solid var(--border-bright);
+  white-space: nowrap;
+}
+
+.pkg-th--version {
+  text-align: center;
+  width: 180px;
+}
+
+.pkg-group-row {
+  background: var(--bg-secondary);
+}
+
+.pkg-group-cell {
+  padding: 8px 14px;
+  font-weight: 600;
+  font-size: 12px;
+  color: var(--accent);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  border-bottom: 1px solid var(--border);
+  border-top: 1px solid var(--border);
+}
+
+.pkg-row {
+  transition: background var(--transition-fast);
+}
+
+.pkg-row:hover {
+  background: var(--bg-hover);
+}
+
+.pkg-td {
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-primary);
+}
+
+.pkg-td--name {
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-size: 12.5px;
+}
+
+.pkg-td--version {
+  text-align: center;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-size: 12.5px;
+}
+
+.pkg-text--current {
+  color: var(--green);
+}
+
+.pkg-text--outdated {
+  color: var(--yellow);
+}
+
+.pkg-text--beta {
+  color: var(--red);
+}
+
+.pkg-text--missing {
+  color: var(--text-muted);
+  opacity: 0.6;
+}
+
+.pkg-stats {
+  color: var(--text-muted);
+}
+
+.pkg-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 64px 0;
+  color: var(--text-muted);
+  font-size: 14px;
+}
+
+.pkg-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 64px 0;
+  color: var(--red);
+  font-size: 14px;
+}
+
+@keyframes pkg-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.pkg-spin {
+  animation: pkg-spin 1s linear infinite;
+}
+
+/* Responsive: horizontal scroll on mobile */
+@media (max-width: 768px) {
+  .pkg-table-wrap {
+    border-radius: 8px;
+  }
+
+  .pkg-th--version {
+    width: 120px;
+  }
+}

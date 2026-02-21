@@ -1,4 +1,4 @@
-import { MessageSquare, Target, Lightbulb, Calendar } from 'lucide-react';
+import { MessageSquare, Target, Lightbulb, Calendar, Package } from 'lucide-react';
 import type { TabId } from '../types';
 
 const tabs: { id: TabId; label: string; icon: typeof MessageSquare }[] = [
@@ -6,6 +6,7 @@ const tabs: { id: TabId; label: string; icon: typeof MessageSquare }[] = [
   { id: 'missions', label: 'Missions', icon: Target },
   { id: 'ideas', label: 'Ideas', icon: Lightbulb },
   { id: 'calendar', label: 'Calendar', icon: Calendar },
+  { id: 'packages', label: 'Packages', icon: Package },
 ];
 
 interface BottomNavProps {

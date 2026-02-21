@@ -897,6 +897,203 @@ app.delete('/api/calendar/events/:id', async (req, res) => {
   }
 });
 
+// ---- Packages API ----
+type PackageStatus = 'current' | 'outdated' | 'missing' | 'beta';
+
+interface PkgInfo {
+  name: string;
+  rawhide: string;
+  stable: string;
+  status: PackageStatus;
+}
+
+interface PkgGroup {
+  name: string;
+  packages: PkgInfo[];
+}
+
+interface PkgCache {
+  groups: PkgGroup[];
+  lastUpdated: string;
+}
+
+let pkgCache: PkgCache | null = null;
+let pkgCacheTime = 0;
+const PKG_CACHE_TTL = 60 * 60 * 1000; // 1 hour
+
+const BUILD_SH_URL = 'https://raw.githubusercontent.com/eosdev-x/TuxLinux/main/build_files/build.sh';
+const MDAPI_BASE = 'https://mdapi.fedoraproject.org';
+
+function parseBuildSh(script: string): PkgGroup[] {
+  const groups: PkgGroup[] = [];
+  const lines = script.split('\n');
+  let currentGroup = 'Ungrouped';
+  const dnfPackages = new Map<string, string[]>();
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+
+    // Detect comment headers like "# Terminal & shell" or "## Editor"
+    const commentMatch = trimmed.match(/^#+\s+(.+)/);
+    if (commentMatch && !trimmed.includes('!/') && !trimmed.includes('set ')) {
+      currentGroup = commentMatch[1]!.trim();
+      continue;
+    }
+
+    // Detect dnf5 install lines
+    if (trimmed.includes('dnf5') && trimmed.includes('install')) {
+      // Extract package names — everything after "install -y" or "install"
+      const afterInstall = trimmed.replace(/.*install\s+(-y\s+)?/, '').replace(/\\$/, '').trim();
+      const pkgs = afterInstall.split(/\s+/).filter(p => p && !p.startsWith('-') && !p.startsWith('#'));
+      for (const pkg of pkgs) {
+        if (!dnfPackages.has(currentGroup)) {
+          dnfPackages.set(currentGroup, []);
+        }
+        dnfPackages.get(currentGroup)!.push(pkg);
+      }
+      continue;
+    }
+
+    // Continuation lines (after backslash) — detect by checking if previous context was dnf
+    if (trimmed && !trimmed.startsWith('#') && !trimmed.startsWith('dnf') && !trimmed.includes('=')
+        && !trimmed.startsWith('if') && !trimmed.startsWith('fi') && !trimmed.startsWith('then')
+        && !trimmed.startsWith('echo') && !trimmed.startsWith('curl') && !trimmed.startsWith('sudo')
+        && !trimmed.startsWith('rpm') && !trimmed.startsWith('cat') && !trimmed.startsWith('source')
+        && !trimmed.startsWith('export') && !trimmed.startsWith('mkdir') && !trimmed.startsWith('cp')
+        && !trimmed.startsWith('chmod') && !trimmed.startsWith('chown') && !trimmed.startsWith('ln')
+        && !trimmed.startsWith('systemctl') && !trimmed.startsWith('usermod')
+        && !trimmed.startsWith('[') && !trimmed.startsWith('done') && !trimmed.startsWith('for')
+        && !trimmed.startsWith('do') && !trimmed.startsWith('EOF') && !trimmed.startsWith('copr')
+        && dnfPackages.has(currentGroup)) {
+      // Might be continuation of a dnf install line
+      const pkgs = trimmed.replace(/\\$/, '').split(/\s+/).filter(p => p && !p.startsWith('-') && !p.startsWith('#'));
+      if (pkgs.length > 0 && pkgs.every(p => /^[@a-zA-Z0-9]/.test(p))) {
+        dnfPackages.get(currentGroup)!.push(...pkgs);
+      }
+    }
+  }
+
+  // Build groups
+  for (const [groupName, pkgs] of dnfPackages) {
+    if (pkgs.length === 0) continue;
+    const uniquePkgs = [...new Set(pkgs)];
+    groups.push({
+      name: groupName,
+      packages: uniquePkgs.map(name => ({
+        name,
+        rawhide: '--',
+        stable: '--',
+        status: 'missing' as PackageStatus,
+      })),
+    });
+  }
+
+  // Add non-DNF packages group
+  groups.push({
+    name: 'Non-DNF Packages',
+    packages: [
+      { name: 'starship', rawhide: '--', stable: '--', status: 'missing' as PackageStatus },
+      { name: 'lazygit', rawhide: '--', stable: '--', status: 'missing' as PackageStatus },
+    ],
+  });
+
+  return groups;
+}
+
+function determineStatus(rawhide: string, stable: string): PackageStatus {
+  if (rawhide === '--' && stable === '--') return 'missing';
+  const preRelease = /alpha|beta|rc|dev|pre/i;
+  if (preRelease.test(rawhide) || preRelease.test(stable)) return 'beta';
+  if (rawhide === '--' || stable === '--') return 'current';
+  if (rawhide === stable) return 'current';
+  // Simple version comparison — if they differ, rawhide is likely newer
+  return 'outdated';
+}
+
+async function fetchPkgVersion(name: string, repo: string): Promise<string> {
+  // Skip group packages (start with @)
+  if (name.startsWith('@')) return '--';
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5000);
+    const res = await fetch(`${MDAPI_BASE}/${repo}/pkg/${name}`, {
+      signal: controller.signal,
+    });
+    clearTimeout(timeout);
+    if (!res.ok) return '--';
+    const data = await res.json() as { version?: string; release?: string };
+    return data.version ?? '--';
+  } catch {
+    return '--';
+  }
+}
+
+async function fetchAllPackages(): Promise<PkgCache> {
+  // Fetch build.sh
+  let script: string;
+  try {
+    const res = await fetch(BUILD_SH_URL);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    script = await res.text();
+  } catch {
+    // Fallback: return empty with error note
+    return { groups: [], lastUpdated: new Date().toISOString() };
+  }
+
+  const groups = parseBuildSh(script);
+
+  // Fetch versions for all packages (with concurrency limit)
+  const allPkgs = groups.flatMap(g => g.packages);
+  const BATCH_SIZE = 10;
+
+  for (let i = 0; i < allPkgs.length; i += BATCH_SIZE) {
+    const batch = allPkgs.slice(i, i + BATCH_SIZE);
+    await Promise.all(batch.map(async (pkg) => {
+      const [rawhide, stable] = await Promise.all([
+        fetchPkgVersion(pkg.name, 'rawhide'),
+        fetchPkgVersion(pkg.name, 'fedora43'),
+      ]);
+      pkg.rawhide = rawhide;
+      pkg.stable = stable;
+      pkg.status = determineStatus(rawhide, stable);
+    }));
+  }
+
+  return {
+    groups,
+    lastUpdated: new Date().toISOString(),
+  };
+}
+
+app.get('/api/packages', async (_req, res) => {
+  try {
+    const now = Date.now();
+    if (pkgCache && (now - pkgCacheTime) < PKG_CACHE_TTL) {
+      res.json(pkgCache);
+      return;
+    }
+    const data = await fetchAllPackages();
+    pkgCache = data;
+    pkgCacheTime = now;
+    res.json(data);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Failed to fetch packages';
+    res.status(500).json({ error: msg });
+  }
+});
+
+app.post('/api/packages/refresh', async (_req, res) => {
+  try {
+    const data = await fetchAllPackages();
+    pkgCache = data;
+    pkgCacheTime = Date.now();
+    res.json(data);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Failed to refresh packages';
+    res.status(500).json({ error: msg });
+  }
+});
+
 app.get('/health', (_req, res) => {
   res.json({ status: 'ok' });
 });
