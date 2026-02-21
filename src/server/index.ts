@@ -173,6 +173,8 @@ function extractPrimaryModel(data: unknown): string | null {
   if (!data || typeof data !== 'object') return null;
   const record = data as Record<string, unknown>;
   const candidates: Array<unknown> = [
+    record.resolvedDefault,
+    record.defaultModel,
     record.primary,
     record.model,
     record.current,
@@ -206,7 +208,7 @@ async function getPrimaryModel(): Promise<string | null> {
   } catch {
     try {
       const { stdout } = await execFileAsync('openclaw', ['models', 'status'], { timeout: 8000 });
-      const match = stdout.match(/(?:primary|current|active)\s*:\s*([^\s]+)/i);
+      const match = stdout.match(/(?:primary|current|active|default)\s*:\s*([^\s]+)/i);
       return match?.[1] ?? null;
     } catch {
       return null;
