@@ -156,8 +156,9 @@ function GroupRows({ name, packages }: { name: string; packages: PackagesData['g
 }
 
 function versionClass(version: string, status: string): string {
-  if (version === '--') return 'pkg-text--missing';
+  if (status === 'missing' || version === '--') return 'pkg-text--missing';
   if (status === 'beta') return 'pkg-text--beta';
   if (status === 'current') return 'pkg-text--current';
+  if (status === 'outdated') return 'pkg-text--outdated';
   return '';
 }

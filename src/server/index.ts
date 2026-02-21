@@ -976,7 +976,8 @@ function parseBuildSh(script: string): PkgGroup[] {
   // Build groups
   for (const [groupName, pkgs] of dnfPackages) {
     if (pkgs.length === 0) continue;
-    const uniquePkgs = [...new Set(pkgs)];
+    const uniquePkgs = [...new Set(pkgs)].filter(name => !name.startsWith('@'));
+    if (uniquePkgs.length === 0) continue;
     groups.push({
       name: groupName,
       packages: uniquePkgs.map(name => ({
@@ -1000,14 +1001,16 @@ function parseBuildSh(script: string): PkgGroup[] {
   return groups;
 }
 
+const versionCollator = new Intl.Collator('en', { numeric: true, sensitivity: 'base' });
+
 function determineStatus(rawhide: string, stable: string): PackageStatus {
-  if (rawhide === '--' && stable === '--') return 'missing';
+  if (rawhide === '--' || stable === '--') return 'missing';
   const preRelease = /alpha|beta|rc|dev|pre/i;
   if (preRelease.test(rawhide) || preRelease.test(stable)) return 'beta';
-  if (rawhide === '--' || stable === '--') return 'current';
   if (rawhide === stable) return 'current';
-  // Simple version comparison — if they differ, rawhide is likely newer
-  return 'outdated';
+  const comparison = versionCollator.compare(rawhide, stable);
+  if (comparison > 0) return 'outdated';
+  return 'current';
 }
 
 async function fetchPkgVersion(name: string, repo: string): Promise<string> {
@@ -1051,7 +1054,7 @@ async function fetchAllPackages(): Promise<PkgCache> {
     await Promise.all(batch.map(async (pkg) => {
       const [rawhide, stable] = await Promise.all([
         fetchPkgVersion(pkg.name, 'rawhide'),
-        fetchPkgVersion(pkg.name, 'fedora43'),
+        fetchPkgVersion(pkg.name, 'f43'),
       ]);
       pkg.rawhide = rawhide;
       pkg.stable = stable;
