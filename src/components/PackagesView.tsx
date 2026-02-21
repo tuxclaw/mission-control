@@ -62,7 +62,7 @@ export function PackagesView() {
         <div>
           <h2 className="board__title text-lg font-semibold">TuxLinux Packages</h2>
           <p className="board__subtitle text-xs mt-1">
-            {lastUpdated ? `Last updated: ${lastUpdated}` : 'Package versions from Fedora repos'}
+            {lastUpdated ? `Last updated: ${lastUpdated}` : 'TuxLinux package versions vs Rawhide'}
             {totalPkgs > 0 && (
               <span className="pkg-stats">
                 {' '}&middot; {totalPkgs} packages &middot;{' '}
@@ -111,7 +111,7 @@ export function PackagesView() {
                 <tr>
                   <th className="pkg-th pkg-th--name">Package</th>
                   <th className="pkg-th pkg-th--version">Rawhide</th>
-                  <th className="pkg-th pkg-th--version">Fedora 43</th>
+                  <th className="pkg-th pkg-th--version">TuxLinux</th>
                 </tr>
               </thead>
               <tbody>
