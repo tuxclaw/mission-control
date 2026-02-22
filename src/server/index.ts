@@ -653,7 +653,7 @@ app.get('/api/memory/:filename', async (req, res) => {
 
 // ---- Workspace Files API (Heartbeat, Rules, Soul) ----
 app.get('/api/workspace-file/:name', async (req, res) => {
-  const allowed = ['HEARTBEAT.md', 'AGENTS.md', 'SOUL.md'];
+  const allowed = ['HEARTBEAT.md', 'AGENTS.md', 'SOUL.md', 'CLAWCOM.md'];
   const name = req.params.name;
   if (!allowed.includes(name)) {
     res.status(400).json({ error: 'File not allowed' });

@@ -1,5 +1,5 @@
 import { useState, memo } from 'react';
-import { Cpu, MemoryStick, HardDrive, MonitorSpeaker, Activity, HeartPulse, ScrollText, Sparkles, Brain, BarChart3, GitBranch } from 'lucide-react';
+import { Cpu, MemoryStick, HardDrive, MonitorSpeaker, Activity, HeartPulse, ScrollText, Sparkles, Brain, BarChart3, GitBranch, Terminal } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useVitals } from '../hooks/useVitals';
 import { CronManager } from './CronManager';
@@ -27,7 +27,7 @@ const Vital = memo(function Vital({ icon: Icon, label, value, color }: VitalProp
   );
 });
 
-type PanelId = 'cron' | 'memory' | 'git' | 'heartbeat' | 'rules' | 'soul' | null;
+type PanelId = 'cron' | 'memory' | 'git' | 'heartbeat' | 'rules' | 'soul' | 'clawcom' | null;
 
 interface ActionDef {
   icon: LucideIcon;
@@ -44,6 +44,7 @@ const actions: ActionDef[] = [
   { icon: Brain, label: 'Memory', tooltip: 'Browse agent memory files', panelId: 'memory' },
   { icon: GitBranch, label: 'Git', tooltip: 'Git status, pull, push & commit', panelId: 'git' },
   { icon: BarChart3, label: 'Metrics', tooltip: 'Performance metrics (coming soon)' },
+  { icon: Terminal, label: 'ClawCom', tooltip: 'OpenClaw command reference', panelId: 'clawcom' },
 ];
 
 export function VitalsBar() {
@@ -62,6 +63,7 @@ export function VitalsBar() {
       <FileViewer open={activePanel === 'heartbeat'} onClose={() => setActivePanel(null)} title="Heartbeat" icon={HeartPulse} filename="HEARTBEAT.md" />
       <FileViewer open={activePanel === 'rules'} onClose={() => setActivePanel(null)} title="Rules" icon={ScrollText} filename="AGENTS.md" />
       <FileViewer open={activePanel === 'soul'} onClose={() => setActivePanel(null)} title="Soul" icon={Sparkles} filename="SOUL.md" />
+      <FileViewer open={activePanel === 'clawcom'} onClose={() => setActivePanel(null)} title="ClawCom" icon={Terminal} filename="CLAWCOM.md" />
 
       <footer className="vitals-bar border-t" role="contentinfo" aria-label="System vitals">
         {/* Action buttons */}
