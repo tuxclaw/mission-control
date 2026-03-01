@@ -1087,8 +1087,6 @@ function logSystemMetrics(stats: SystemStats) {
   if (!lastSystemPrune || Date.now() - lastSystemPrune > 6 * 60 * 60 * 1000) {
     pruneSystemDb();
   }
-
-  saveSystemDb();
 }
 
 function mapSqlRows(results: Array<{ columns: string[]; values: Array<Array<number | string | null>> }>): SqlRow[] {
@@ -1107,19 +1105,25 @@ function mapSqlRows(results: Array<{ columns: string[]; values: Array<Array<numb
 function getSystemHistory(minutes: number): SqlRow[] {
   if (!systemDb) return [];
   const since = Date.now() - minutes * 60 * 1000;
-  const results = systemDb.exec(`
+  const stmt = systemDb.prepare(`
     SELECT timestamp, cpu_total, mem_used, mem_total, mem_percent,
            disk_percent, load_1m, load_5m, load_15m
     FROM metrics
-    WHERE timestamp > ${since}
+    WHERE timestamp > ?
     ORDER BY timestamp ASC
-  `) as Array<{ columns: string[]; values: Array<Array<number | string | null>> }>;
+  `);
+  stmt.bind([since]);
+  const rows: SqlRow[] = [];
+  while (stmt.step()) {
+    rows.push(stmt.getAsObject() as SqlRow);
+  }
+  stmt.free();
+  const results = rows.length > 0 ? rows : [] as SqlRow[];
 
-  const rows = mapSqlRows(results);
   if (minutes > 60) {
     const sampled: SqlRow[] = [];
     let lastTs = 0;
-    for (const row of rows) {
+    for (const row of results) {
       const ts = typeof row.timestamp === 'number' ? row.timestamp : Number(row.timestamp ?? 0);
       if (ts - lastTs >= 5 * 60 * 1000) {
         sampled.push(row);
@@ -1128,21 +1132,27 @@ function getSystemHistory(minutes: number): SqlRow[] {
     }
     return sampled;
   }
-  return rows;
+  return results;
 }
 
 function getSystemGpuHistory(minutes: number, card?: string | null): SqlRow[] {
   if (!systemDb) return [];
   const since = Date.now() - minutes * 60 * 1000;
-  const filter = card ? `AND card = '${card.replace(/'/g, "''")}'` : '';
-  const results = systemDb.exec(`
-    SELECT timestamp, busy, vram_used, vram_total, vram_percent, temp_edge, temp_junction, power_w
-    FROM gpu_metrics
-    WHERE timestamp > ${since} ${filter}
-    ORDER BY timestamp ASC
-  `) as Array<{ columns: string[]; values: Array<Array<number | string | null>> }>;
-
-  const rows = mapSqlRows(results);
+  const stmt = card
+    ? systemDb.prepare(`
+        SELECT timestamp, busy, vram_used, vram_total, vram_percent, temp_edge, temp_junction, power_w
+        FROM gpu_metrics WHERE timestamp > ? AND card = ? ORDER BY timestamp ASC
+      `)
+    : systemDb.prepare(`
+        SELECT timestamp, busy, vram_used, vram_total, vram_percent, temp_edge, temp_junction, power_w
+        FROM gpu_metrics WHERE timestamp > ? ORDER BY timestamp ASC
+      `);
+  stmt.bind(card ? [since, card] : [since]);
+  const rows: SqlRow[] = [];
+  while (stmt.step()) {
+    rows.push(stmt.getAsObject() as SqlRow);
+  }
+  stmt.free();
   if (minutes > 60) {
     const sampled: SqlRow[] = [];
     let lastTs = 0;

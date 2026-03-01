@@ -38,8 +38,8 @@ function coreColor(pct: number) {
   if (pct < 20) return 'rgba(0, 212, 255, 0.3)';
   if (pct < 40) return 'rgba(0, 230, 118, 0.4)';
   if (pct < 60) return 'rgba(0, 230, 118, 0.6)';
-  if (pct < 75) return 'rgba(255, 215, 64, 0.6)';
-  if (pct < 90) return 'rgba(255, 145, 0, 0.7)';
+  if (pct < 75) return 'rgba(234, 179, 8, 0.6)';
+  if (pct < 90) return 'rgba(239, 68, 68, 0.6)';
   return 'rgba(255, 82, 82, 0.8)';
 }
 
@@ -170,7 +170,7 @@ export function SystemDash() {
   const colors = useMemo(() => ({
     cpu: '#06b6d4',
     mem: '#a855f7',
-    gpu: '#eab308',
+    gpu: '#22c55e',
   }), []);
 
   useEffect(() => {
@@ -440,7 +440,7 @@ export function SystemDash() {
                 <button
                   key={period}
                   type="button"
-                  className={`sysdash-chart__btn ${cpuPeriod === period ? 'is-active' : ''}`}
+                  className={`sysdash-chart__btn ${cpuPeriod === period ? 'sysdash-chart__btn--active' : ''}`}
                   onClick={() => setCpuPeriod(period)}
                 >
                   {period}
@@ -459,7 +459,7 @@ export function SystemDash() {
                 <button
                   key={period}
                   type="button"
-                  className={`sysdash-chart__btn ${memPeriod === period ? 'is-active' : ''}`}
+                  className={`sysdash-chart__btn ${memPeriod === period ? 'sysdash-chart__btn--active' : ''}`}
                   onClick={() => setMemPeriod(period)}
                 >
                   {period}
@@ -478,7 +478,7 @@ export function SystemDash() {
                 <button
                   key={period}
                   type="button"
-                  className={`sysdash-chart__btn ${gpuPeriod === period ? 'is-active' : ''}`}
+                  className={`sysdash-chart__btn ${gpuPeriod === period ? 'sysdash-chart__btn--active' : ''}`}
                   onClick={() => setGpuPeriod(period)}
                 >
                   {period}

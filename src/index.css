@@ -3844,7 +3844,7 @@ body {
   color: var(--accent);
 }
 
-.sysdash-chart__btn.is-active {
+.sysdash-chart__btn.sysdash-chart__btn--active {
   background: var(--accent);
   color: #001014;
   border-color: transparent;
