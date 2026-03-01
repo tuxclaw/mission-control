@@ -12,6 +12,7 @@ import { IdeaBoard } from './components/IdeaBoard';
 import { CalendarView } from './components/CalendarView';
 import { PackagesView } from './components/PackagesView';
 import { LearningLog } from './components/LearningLog';
+import { SystemDash } from './components/SystemDash';
 import type { TabId } from './types';
 
 export default function App() {
@@ -31,6 +32,7 @@ export default function App() {
           {sidebarOpen && <Sidebar selectedAgent={selectedAgent} onSelectAgent={setSelectedAgent} collapsed={false} onToggle={toggleSidebar} />}
           <main className="flex-1 flex flex-col min-h-0">
             {activeTab === 'chat' && <ChatView />}
+            {activeTab === 'system' && <SystemDash />}
             {activeTab === 'missions' && <MissionBoard />}
             {activeTab === 'ideas' && <IdeaBoard />}
             {activeTab === 'learning-log' && <LearningLog />}

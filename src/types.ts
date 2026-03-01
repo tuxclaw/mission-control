@@ -26,6 +26,116 @@ export interface SystemVitals {
   gpu: { available: boolean; model?: string; vram?: number } | null;
 }
 
+export interface SystemCpuCore {
+  core: number;
+  usage: number;
+}
+
+export interface SystemCpu {
+  total: number;
+  cores: SystemCpuCore[];
+}
+
+export interface SystemMemory {
+  total: number;
+  used: number;
+  free: number;
+  percent: number;
+}
+
+export interface SystemDisk {
+  mount: string;
+  total: number;
+  used: number;
+  avail: number;
+  percent: number;
+}
+
+export interface SystemGpu {
+  card: string;
+  model: string | null;
+  busy: number;
+  vramTotal: number;
+  vramUsed: number;
+  vramPercent: number;
+  tempEdge: number | null;
+  tempJunction: number | null;
+  tempMem: number | null;
+  fanRpm: number | null;
+  powerW: number | null;
+  powerCapW: number | null;
+  sclkMhz: number;
+  mclkMhz: number;
+}
+
+export interface SystemLoadAvg {
+  '1m': number;
+  '5m': number;
+  '15m': number;
+}
+
+export interface SystemUptime {
+  seconds: number;
+  formatted: string;
+}
+
+export interface SystemProcess {
+  user: string;
+  pid: number;
+  cpu: number;
+  mem: number;
+  vsz: number;
+  rss: number;
+  command: string;
+}
+
+export interface SystemContainer {
+  id: string;
+  name: string;
+  image: string;
+  status: string;
+  state: string;
+  created: string;
+  ports: unknown[];
+}
+
+export interface SystemStats {
+  timestamp: number;
+  hostname: string;
+  cpuModel: string | null;
+  cpu: SystemCpu;
+  memory: SystemMemory;
+  disk: SystemDisk[];
+  gpus: SystemGpu[];
+  uptime: SystemUptime;
+  loadAvg: SystemLoadAvg;
+  processes: SystemProcess[];
+  containers: SystemContainer[];
+}
+
+export interface SystemHistoryPoint {
+  timestamp: number;
+  cpu_total: number;
+  mem_used: number;
+  mem_total: number;
+  mem_percent: number;
+  disk_percent: number;
+  load_1m: number;
+  load_5m: number;
+  load_15m: number;
+}
+
+export interface SystemGpuHistoryPoint {
+  timestamp: number;
+  busy: number;
+  vram_used: number;
+  vram_total: number;
+  vram_percent: number;
+  temp_edge: number | null;
+  temp_junction: number | null;
+  power_w: number | null;
+}
+
 export interface VitalsSimple {
   cpu: number;
   ram: number;
@@ -33,7 +143,7 @@ export interface VitalsSimple {
   gpu: number;
 }
 
-export type TabId = 'chat' | 'missions' | 'ideas' | 'calendar' | 'packages' | 'learning-log';
+export type TabId = 'chat' | 'system' | 'missions' | 'ideas' | 'calendar' | 'packages' | 'learning-log';
 
 export type PackageStatus = 'current' | 'outdated' | 'missing' | 'beta';
 

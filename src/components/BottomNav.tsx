@@ -1,8 +1,9 @@
-import { MessageSquare, Target, Lightbulb, Calendar, Package, BookOpen } from 'lucide-react';
+import { MessageSquare, Target, Lightbulb, Calendar, Package, BookOpen, Monitor } from 'lucide-react';
 import type { TabId } from '../types';
 
 const tabs: { id: TabId; label: string; icon: typeof MessageSquare }[] = [
   { id: 'chat', label: 'Chat', icon: MessageSquare },
+  { id: 'system', label: 'System', icon: Monitor },
   { id: 'missions', label: 'Missions', icon: Target },
   { id: 'ideas', label: 'Ideas', icon: Lightbulb },
   { id: 'learning-log', label: 'Learning Log', icon: BookOpen },

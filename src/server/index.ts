@@ -1,11 +1,15 @@
 import express from 'express';
 import cors from 'cors';
 import { readFile, readdir, writeFile, mkdir } from 'node:fs/promises';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { exec, execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { createServer } from 'node:http';
+import os from 'node:os';
 import WebSocket, { WebSocketServer } from 'ws';
+import initSqlJs from 'sql.js';
+import type { Database, SqlJsStatic } from 'sql.js';
 
 const execAsync = promisify(exec);
 const execFileAsync = promisify(execFile);
@@ -542,6 +546,683 @@ async function getGpuPercent(): Promise<number> {
     return 0;
   }
 }
+
+// ---- System stats (SysDash) ----
+interface CpuTimes {
+  name: string;
+  idle: number;
+  active: number;
+  total: number;
+}
+
+interface CpuUsage {
+  total: number;
+  cores: Array<{ core: number; usage: number }>;
+}
+
+interface MemoryStats {
+  total: number;
+  used: number;
+  free: number;
+  percent: number;
+}
+
+interface DiskStats {
+  mount: string;
+  total: number;
+  used: number;
+  avail: number;
+  percent: number;
+}
+
+interface GpuStats {
+  card: string;
+  model: string | null;
+  busy: number;
+  vramTotal: number;
+  vramUsed: number;
+  vramPercent: number;
+  tempEdge: number | null;
+  tempJunction: number | null;
+  tempMem: number | null;
+  fanRpm: number | null;
+  powerW: number | null;
+  powerCapW: number | null;
+  sclkMhz: number;
+  mclkMhz: number;
+}
+
+interface LoadAvgStats {
+  '1m': number;
+  '5m': number;
+  '15m': number;
+}
+
+interface UptimeStats {
+  seconds: number;
+  formatted: string;
+}
+
+interface ProcessStats {
+  user: string;
+  pid: number;
+  cpu: number;
+  mem: number;
+  vsz: number;
+  rss: number;
+  command: string;
+}
+
+interface ContainerStats {
+  id: string;
+  name: string;
+  image: string;
+  status: string;
+  state: string;
+  created: string;
+  ports: unknown[];
+}
+
+interface SystemStats {
+  timestamp: number;
+  hostname: string;
+  cpuModel: string | null;
+  cpu: CpuUsage;
+  memory: MemoryStats;
+  disk: DiskStats[];
+  gpus: GpuStats[];
+  uptime: UptimeStats;
+  loadAvg: LoadAvgStats;
+  processes: ProcessStats[];
+  containers: ContainerStats[];
+}
+
+interface SqlRow {
+  [key: string]: number | string | null;
+}
+
+let prevCpuTimes: { total: CpuTimes | null; cores: CpuTimes[] } | null = null;
+let cachedCpuModel: string | null = null;
+
+function parseProcStat(content: string) {
+  const lines = content.trim().split('\n');
+  const cores: CpuTimes[] = [];
+  let total: CpuTimes | null = null;
+
+  for (const line of lines) {
+    if (!line.startsWith('cpu')) continue;
+    const parts = line.trim().split(/\s+/);
+    const name = parts[0] ?? '';
+    const nums = parts.slice(1).map(Number);
+    const idle = (nums[3] ?? 0) + (nums[4] ?? 0);
+    const active = (nums[0] ?? 0) + (nums[1] ?? 0) + (nums[2] ?? 0)
+      + (nums[5] ?? 0) + (nums[6] ?? 0) + (nums[7] ?? 0);
+    const totalTime = idle + active;
+    const entry = { name, idle, active, total: totalTime };
+    if (name === 'cpu') {
+      total = entry;
+    } else {
+      cores.push(entry);
+    }
+  }
+
+  return { total, cores };
+}
+
+function calcUsage(prev: CpuTimes, curr: CpuTimes) {
+  const totalDelta = curr.total - prev.total;
+  if (totalDelta <= 0) return 0;
+  const idleDelta = curr.idle - prev.idle;
+  return Math.round(((totalDelta - idleDelta) / totalDelta) * 1000) / 10;
+}
+
+async function getCpuModel(): Promise<string | null> {
+  if (cachedCpuModel) return cachedCpuModel;
+  try {
+    const content = await readFile('/proc/cpuinfo', 'utf-8');
+    const match = content.match(/model name\s*:\s*(.+)/);
+    if (match?.[1]) cachedCpuModel = match[1].trim();
+  } catch {
+    cachedCpuModel = null;
+  }
+  return cachedCpuModel;
+}
+
+function computeCpuResult(prev: { total: CpuTimes | null; cores: CpuTimes[] }, curr: { total: CpuTimes | null; cores: CpuTimes[] }): CpuUsage {
+  if (!prev.total || !curr.total) return { total: 0, cores: [] };
+  const totalUsage = calcUsage(prev.total, curr.total);
+  const coreUsages = curr.cores.map((core, i) => ({
+    core: i,
+    usage: calcUsage(prev.cores[i] ?? core, core),
+  }));
+  return { total: totalUsage, cores: coreUsages };
+}
+
+async function getCpuUsage(): Promise<CpuUsage> {
+  const content = await readFile('/proc/stat', 'utf-8');
+  const current = parseProcStat(content);
+
+  if (!prevCpuTimes) {
+    prevCpuTimes = current;
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    const content2 = await readFile('/proc/stat', 'utf-8');
+    const next = parseProcStat(content2);
+    prevCpuTimes = current;
+    const result = computeCpuResult(current, next);
+    prevCpuTimes = next;
+    return result;
+  }
+
+  const result = computeCpuResult(prevCpuTimes, current);
+  prevCpuTimes = current;
+  return result;
+}
+
+function getMemory(): MemoryStats {
+  const total = os.totalmem();
+  const free = os.freemem();
+  const used = total - free;
+  return {
+    total,
+    used,
+    free,
+    percent: Math.round((used / total) * 1000) / 10,
+  };
+}
+
+async function getDisk(): Promise<DiskStats[]> {
+  try {
+    const { stdout } = await execFileAsync('df', ['-B1', '--output=size,used,avail,pcent,target'], { timeout: 5000 });
+    const lines = stdout.trim().split('\n').slice(1);
+    const disks: DiskStats[] = [];
+    const validMounts = ['/var/home', '/boot', '/tmp', '/'];
+    for (const line of lines) {
+      const parts = line.trim().split(/\s+/);
+      if (parts.length < 5) continue;
+      const mount = parts[4] ?? '';
+      if (!validMounts.some((m) => mount === m)) continue;
+      if (Number(parts[0]) < 1073741824) continue;
+      disks.push({
+        mount,
+        total: Number(parts[0]),
+        used: Number(parts[1]),
+        avail: Number(parts[2]),
+        percent: Number.parseFloat(parts[3] ?? '0'),
+      });
+    }
+    return disks;
+  } catch {
+    return [];
+  }
+}
+
+function getUptime(): UptimeStats {
+  const upSec = os.uptime();
+  const days = Math.floor(upSec / 86400);
+  const hours = Math.floor((upSec % 86400) / 3600);
+  const mins = Math.floor((upSec % 3600) / 60);
+  const secs = Math.floor(upSec % 60);
+  return {
+    seconds: upSec,
+    formatted: `${days}d ${hours}h ${mins}m ${secs}s`,
+  };
+}
+
+async function getTopProcesses(): Promise<ProcessStats[]> {
+  try {
+    const { stdout } = await execFileAsync('ps', ['aux', '--sort=-pcpu'], { timeout: 5000 });
+    const lines = stdout.trim().split('\n').slice(1, 11);
+    return lines.map((line) => {
+      const parts = line.trim().split(/\s+/);
+      return {
+        user: parts[0] ?? '',
+        pid: Number(parts[1] ?? 0),
+        cpu: Number.parseFloat(parts[2] ?? '0'),
+        mem: Number.parseFloat(parts[3] ?? '0'),
+        vsz: Number(parts[4] ?? 0),
+        rss: Number(parts[5] ?? 0),
+        command: parts.slice(10).join(' ').substring(0, 80),
+      };
+    });
+  } catch {
+    return [];
+  }
+}
+
+async function getContainers(): Promise<ContainerStats[]> {
+  try {
+    const { stdout } = await execFileAsync('podman', ['ps', '--format', 'json'], { timeout: 10000 });
+    const containers = JSON.parse(stdout || '[]') as Array<Record<string, unknown>>;
+    return containers.map((c) => {
+      const names = (c.Names ?? c.names) as string[] | undefined;
+      const name = names?.[0]
+        ?? (c.Name as string | undefined)
+        ?? (c.name as string | undefined)
+        ?? '';
+      return {
+        id: ((c.Id as string | undefined) ?? (c.id as string | undefined) ?? '').substring(0, 12),
+        name,
+        image: (c.Image as string | undefined) ?? (c.image as string | undefined) ?? '',
+        status: (c.Status as string | undefined) ?? (c.status as string | undefined) ?? (c.State as string | undefined) ?? '',
+        state: (c.State as string | undefined) ?? (c.state as string | undefined) ?? '',
+        created: (c.Created as string | undefined) ?? (c.created as string | undefined) ?? (c.CreatedAt as string | undefined) ?? '',
+        ports: (c.Ports as unknown[] | undefined) ?? (c.ports as unknown[] | undefined) ?? [],
+      };
+    });
+  } catch {
+    return [];
+  }
+}
+
+async function getGpus(): Promise<GpuStats[]> {
+  const gpus: GpuStats[] = [];
+  try {
+    const cards = (await readdir('/sys/class/drm')).filter((d) => /^card\d+$/.test(d));
+    for (const card of cards) {
+      const base = `/sys/class/drm/${card}/device`;
+      try {
+        const vramTotal = Number.parseInt(await readFile(`${base}/mem_info_vram_total`, 'utf-8').catch(() => '0'), 10);
+        if (vramTotal < 1073741824) continue;
+
+        const gpuBusy = Number.parseInt(await readFile(`${base}/gpu_busy_percent`, 'utf-8').catch(() => '0'), 10);
+        const vramUsed = Number.parseInt(await readFile(`${base}/mem_info_vram_used`, 'utf-8').catch(() => '0'), 10);
+
+        const temps: Record<string, number> = {};
+        try {
+          const hwmonDirs = await readdir(`${base}/hwmon`);
+          for (const hw of hwmonDirs) {
+            const hwPath = `${base}/hwmon/${hw}`;
+            for (const suffix of ['edge', 'junction', 'mem']) {
+              for (let i = 1; i <= 5; i += 1) {
+                try {
+                  const label = (await readFile(`${hwPath}/temp${i}_label`, 'utf-8')).trim();
+                  if (label === suffix) {
+                    const val = Number.parseInt(await readFile(`${hwPath}/temp${i}_input`, 'utf-8'), 10);
+                    temps[suffix] = Math.round(val / 1000);
+                  }
+                } catch {
+                  // skip
+                }
+              }
+            }
+            try {
+              temps.fanRpm = Number.parseInt(await readFile(`${hwPath}/fan1_input`, 'utf-8'), 10);
+            } catch {
+              // no fan
+            }
+            try {
+              temps.powerW = Math.round(Number.parseInt(await readFile(`${hwPath}/power1_average`, 'utf-8'), 10) / 1000000);
+              temps.powerCapW = Math.round(Number.parseInt(await readFile(`${hwPath}/power1_cap`, 'utf-8'), 10) / 1000000);
+            } catch {
+              // no power
+            }
+          }
+        } catch {
+          // no hwmon
+        }
+
+        let sclkMhz = 0;
+        let mclkMhz = 0;
+        try {
+          const sclk = await readFile(`${base}/pp_dpm_sclk`, 'utf-8');
+          const activeS = sclk.split('\n').find((line) => line.includes('*'));
+          if (activeS) sclkMhz = Number.parseInt(activeS.match(/(\d+)Mhz/)?.[1] ?? '0', 10);
+        } catch {
+          // no sclk
+        }
+        try {
+          const mclk = await readFile(`${base}/pp_dpm_mclk`, 'utf-8');
+          const activeM = mclk.split('\n').find((line) => line.includes('*'));
+          if (activeM) mclkMhz = Number.parseInt(activeM.match(/(\d+)Mhz/)?.[1] ?? '0', 10);
+        } catch {
+          // no mclk
+        }
+
+        let gpuModel: string | null = null;
+        try {
+          const uevent = await readFile(`${base}/uevent`, 'utf-8');
+          const pciSlot = uevent.match(/PCI_SLOT_NAME=(.+)/)?.[1];
+          if (pciSlot) {
+            const { stdout } = await execFileAsync('lspci', ['-s', pciSlot], { timeout: 3000 });
+            const match = stdout.match(/\[([^\]]*(?:Radeon|GeForce|Intel|Arc)[^\]]*)\]/)
+              || stdout.match(/:\s*.+?\]\s*(.+?)(?:\s*\(rev|$)/);
+            if (match?.[1]) {
+              gpuModel = match[1].split('/')[0]?.trim() ?? null;
+            }
+          }
+        } catch {
+          gpuModel = null;
+        }
+
+        gpus.push({
+          card,
+          model: gpuModel,
+          busy: gpuBusy,
+          vramTotal,
+          vramUsed,
+          vramPercent: Math.round((vramUsed / vramTotal) * 1000) / 10,
+          tempEdge: temps.edge ?? null,
+          tempJunction: temps.junction ?? null,
+          tempMem: temps.mem ?? null,
+          fanRpm: temps.fanRpm ?? null,
+          powerW: temps.powerW ?? null,
+          powerCapW: temps.powerCapW ?? null,
+          sclkMhz,
+          mclkMhz,
+        });
+      } catch {
+        // skip card
+      }
+    }
+  } catch {
+    // no GPUs
+  }
+  return gpus;
+}
+
+function getLoadAvg(): LoadAvgStats {
+  const loads = os.loadavg();
+  return {
+    '1m': Math.round(loads[0] * 100) / 100,
+    '5m': Math.round(loads[1] * 100) / 100,
+    '15m': Math.round(loads[2] * 100) / 100,
+  };
+}
+
+async function collectSystemStats(): Promise<SystemStats> {
+  const [cpu, disk, processes, containers, gpus, cpuModelName] = await Promise.all([
+    getCpuUsage(),
+    getDisk(),
+    getTopProcesses(),
+    getContainers(),
+    getGpus(),
+    getCpuModel(),
+  ]);
+
+  return {
+    timestamp: Date.now(),
+    hostname: os.hostname(),
+    cpuModel: cpuModelName,
+    cpu,
+    memory: getMemory(),
+    disk,
+    gpus,
+    uptime: getUptime(),
+    loadAvg: getLoadAvg(),
+    processes,
+    containers,
+  };
+}
+
+let systemDb: Database | null = null;
+let systemDbPath: string | null = null;
+let systemSql: SqlJsStatic | null = null;
+let systemSaveTimer: NodeJS.Timeout | null = null;
+let lastSystemPrune = 0;
+
+async function initSystemDb(path: string) {
+  systemDbPath = path;
+  mkdirSync(dirname(path), { recursive: true });
+  systemSql = await initSqlJs();
+
+  if (existsSync(path)) {
+    const fileBuffer = readFileSync(path);
+    systemDb = new systemSql.Database(fileBuffer);
+  } else {
+    systemDb = new systemSql.Database();
+  }
+
+  systemDb.run(`
+    CREATE TABLE IF NOT EXISTS metrics (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      timestamp INTEGER NOT NULL,
+      cpu_total REAL,
+      mem_used INTEGER,
+      mem_total INTEGER,
+      mem_percent REAL,
+      disk_percent REAL,
+      load_1m REAL,
+      load_5m REAL,
+      load_15m REAL
+    )
+  `);
+
+  systemDb.run(`
+    CREATE TABLE IF NOT EXISTS gpu_metrics (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      timestamp INTEGER NOT NULL,
+      card TEXT,
+      busy REAL,
+      vram_used INTEGER,
+      vram_total INTEGER,
+      vram_percent REAL,
+      temp_edge REAL,
+      temp_junction REAL,
+      temp_mem REAL,
+      power_w REAL,
+      fan_rpm INTEGER,
+      sclk_mhz INTEGER,
+      mclk_mhz INTEGER
+    )
+  `);
+
+  systemDb.run('CREATE INDEX IF NOT EXISTS idx_gpu_metrics_ts ON gpu_metrics(timestamp)');
+  systemDb.run('CREATE INDEX IF NOT EXISTS idx_metrics_ts ON metrics(timestamp)');
+
+  pruneSystemDb();
+  saveSystemDb();
+
+  systemSaveTimer = setInterval(saveSystemDb, 60000);
+}
+
+function saveSystemDb() {
+  if (!systemDb || !systemDbPath) return;
+  try {
+    const data = systemDb.export();
+    const buffer = Buffer.from(data);
+    writeFileSync(systemDbPath, buffer);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'unknown';
+    console.error('System DB save error:', msg);
+  }
+}
+
+function pruneSystemDb() {
+  if (!systemDb) return;
+  const cutoff = Date.now() - 48 * 60 * 60 * 1000;
+  systemDb.run('DELETE FROM metrics WHERE timestamp < ?', [cutoff]);
+  systemDb.run('DELETE FROM gpu_metrics WHERE timestamp < ?', [cutoff]);
+  lastSystemPrune = Date.now();
+}
+
+function logSystemMetrics(stats: SystemStats) {
+  if (!systemDb) return;
+
+  const rootDisk = stats.disk.find((d) => d.mount === '/var/home')
+    ?? stats.disk.find((d) => d.mount === '/')
+    ?? stats.disk[0];
+  const diskPct = rootDisk ? rootDisk.percent : 0;
+  const loadAvg = stats.loadAvg ?? { '1m': 0, '5m': 0, '15m': 0 };
+
+  systemDb.run(
+    `INSERT INTO metrics (timestamp, cpu_total, mem_used, mem_total, mem_percent, disk_percent, load_1m, load_5m, load_15m)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      stats.timestamp,
+      stats.cpu.total,
+      stats.memory.used,
+      stats.memory.total,
+      stats.memory.percent,
+      diskPct,
+      loadAvg['1m'],
+      loadAvg['5m'],
+      loadAvg['15m'],
+    ],
+  );
+
+  if (stats.gpus) {
+    for (const gpu of stats.gpus) {
+      systemDb.run(
+        `INSERT INTO gpu_metrics (timestamp, card, busy, vram_used, vram_total, vram_percent, temp_edge, temp_junction, temp_mem, power_w, fan_rpm, sclk_mhz, mclk_mhz)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          stats.timestamp,
+          gpu.card,
+          gpu.busy,
+          gpu.vramUsed,
+          gpu.vramTotal,
+          gpu.vramPercent,
+          gpu.tempEdge,
+          gpu.tempJunction,
+          gpu.tempMem,
+          gpu.powerW,
+          gpu.fanRpm,
+          gpu.sclkMhz,
+          gpu.mclkMhz,
+        ],
+      );
+    }
+  }
+
+  if (!lastSystemPrune || Date.now() - lastSystemPrune > 6 * 60 * 60 * 1000) {
+    pruneSystemDb();
+  }
+
+  saveSystemDb();
+}
+
+function mapSqlRows(results: Array<{ columns: string[]; values: Array<Array<number | string | null>> }>): SqlRow[] {
+  if (!results.length) return [];
+  const columns = results[0]?.columns ?? [];
+  const rows = results[0]?.values ?? [];
+  return rows.map((row) => {
+    const obj: SqlRow = {};
+    columns.forEach((col, i) => {
+      obj[col] = row[i] ?? null;
+    });
+    return obj;
+  });
+}
+
+function getSystemHistory(minutes: number): SqlRow[] {
+  if (!systemDb) return [];
+  const since = Date.now() - minutes * 60 * 1000;
+  const results = systemDb.exec(`
+    SELECT timestamp, cpu_total, mem_used, mem_total, mem_percent,
+           disk_percent, load_1m, load_5m, load_15m
+    FROM metrics
+    WHERE timestamp > ${since}
+    ORDER BY timestamp ASC
+  `) as Array<{ columns: string[]; values: Array<Array<number | string | null>> }>;
+
+  const rows = mapSqlRows(results);
+  if (minutes > 60) {
+    const sampled: SqlRow[] = [];
+    let lastTs = 0;
+    for (const row of rows) {
+      const ts = typeof row.timestamp === 'number' ? row.timestamp : Number(row.timestamp ?? 0);
+      if (ts - lastTs >= 5 * 60 * 1000) {
+        sampled.push(row);
+        lastTs = ts;
+      }
+    }
+    return sampled;
+  }
+  return rows;
+}
+
+function getSystemGpuHistory(minutes: number, card?: string | null): SqlRow[] {
+  if (!systemDb) return [];
+  const since = Date.now() - minutes * 60 * 1000;
+  const filter = card ? `AND card = '${card.replace(/'/g, "''")}'` : '';
+  const results = systemDb.exec(`
+    SELECT timestamp, busy, vram_used, vram_total, vram_percent, temp_edge, temp_junction, power_w
+    FROM gpu_metrics
+    WHERE timestamp > ${since} ${filter}
+    ORDER BY timestamp ASC
+  `) as Array<{ columns: string[]; values: Array<Array<number | string | null>> }>;
+
+  const rows = mapSqlRows(results);
+  if (minutes > 60) {
+    const sampled: SqlRow[] = [];
+    let lastTs = 0;
+    for (const row of rows) {
+      const ts = typeof row.timestamp === 'number' ? row.timestamp : Number(row.timestamp ?? 0);
+      if (ts - lastTs >= 5 * 60 * 1000) {
+        sampled.push(row);
+        lastTs = ts;
+      }
+    }
+    return sampled;
+  }
+  return rows;
+}
+
+const systemClients = new Set<WebSocket>();
+const systemWss = new WebSocketServer({ server, path: '/ws/system' });
+
+systemWss.on('connection', (ws) => {
+  systemClients.add(ws);
+  collectSystemStats().then((stats) => {
+    if (ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify(stats));
+    }
+  }).catch(() => {
+    // ignore
+  });
+  ws.on('close', () => systemClients.delete(ws));
+  ws.on('error', () => systemClients.delete(ws));
+});
+
+async function broadcastSystemStats() {
+  try {
+    const stats = await collectSystemStats();
+    const msg = JSON.stringify(stats);
+    for (const ws of systemClients) {
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.send(msg);
+      }
+    }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'unknown';
+    console.error('System broadcast error:', msg);
+  }
+  setTimeout(broadcastSystemStats, 2000);
+}
+
+async function logSystemStats() {
+  try {
+    const stats = await collectSystemStats();
+    logSystemMetrics(stats);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'unknown';
+    console.error('System log error:', msg);
+  }
+  setTimeout(logSystemStats, 30000);
+}
+
+app.get('/api/system/history/:period', (req, res) => {
+  const { period } = req.params;
+  const valid = ['1h', '24h'];
+  if (!valid.includes(period)) {
+    res.status(400).json({ error: 'Invalid period. Use 1h or 24h' });
+    return;
+  }
+  const minutes = period === '1h' ? 60 : 1440;
+  res.json(getSystemHistory(minutes));
+});
+
+app.get('/api/system/gpu-history/:period', (req, res) => {
+  const { period } = req.params;
+  const valid = ['1h', '24h'];
+  if (!valid.includes(period)) {
+    res.status(400).json({ error: 'Invalid period. Use 1h or 24h' });
+    return;
+  }
+  const minutes = period === '1h' ? 60 : 1440;
+  const card = typeof req.query.card === 'string' ? req.query.card : null;
+  res.json(getSystemGpuHistory(minutes, card));
+});
 
 app.get('/api/vitals', async (_req, res) => {
   try {
@@ -1287,6 +1968,19 @@ app.use(express.static(DIST_DIR));
 app.get('/{*path}', (_req, res) => {
   res.sendFile(join(DIST_DIR, 'index.html'));
 });
+
+async function startSystemMonitor() {
+  try {
+    await initSystemDb(join(REPO_ROOT, 'data', 'metrics.db'));
+    broadcastSystemStats();
+    logSystemStats();
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'unknown';
+    console.error('System monitor init error:', msg);
+  }
+}
+
+startSystemMonitor();
 
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`Andy's Overview running on http://0.0.0.0:${PORT}`);
