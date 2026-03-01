@@ -33,7 +33,7 @@ export interface VitalsSimple {
   gpu: number;
 }
 
-export type TabId = 'chat' | 'missions' | 'ideas' | 'calendar' | 'packages';
+export type TabId = 'chat' | 'missions' | 'ideas' | 'calendar' | 'packages' | 'learning-log';
 
 export type PackageStatus = 'current' | 'outdated' | 'missing' | 'beta';
 
@@ -129,4 +129,16 @@ export interface CalendarEvent {
   description?: string;
   color: CalendarEventColor;
   source: CalendarEventSource;
+}
+
+export type LearningLogEntryType = 'error' | 'learning' | 'feature';
+
+export interface LearningLogEntry {
+  id: string;
+  type: LearningLogEntryType;
+  category: string;
+  text: string;
+  date: string;
+  source?: string;
+  project?: string;
 }

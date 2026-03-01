@@ -11,6 +11,7 @@ import { MissionBoard } from './components/MissionBoard';
 import { IdeaBoard } from './components/IdeaBoard';
 import { CalendarView } from './components/CalendarView';
 import { PackagesView } from './components/PackagesView';
+import { LearningLog } from './components/LearningLog';
 import type { TabId } from './types';
 
 export default function App() {
@@ -32,6 +33,7 @@ export default function App() {
             {activeTab === 'chat' && <ChatView />}
             {activeTab === 'missions' && <MissionBoard />}
             {activeTab === 'ideas' && <IdeaBoard />}
+            {activeTab === 'learning-log' && <LearningLog />}
             {activeTab === 'calendar' && <CalendarView />}
             {activeTab === 'packages' && <PackagesView />}
           </main>

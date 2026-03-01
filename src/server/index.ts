@@ -616,6 +616,80 @@ app.put('/api/missions', async (req, res) => {
   }
 });
 
+// ---- Learning Log API ----
+const LEARNING_LOG_FILE = join(REPO_ROOT, 'data/learning-log.json');
+
+type LearningLogEntryType = 'error' | 'learning' | 'feature';
+type LearningLogEntry = {
+  id: string;
+  type: LearningLogEntryType;
+  category: string;
+  text: string;
+  date: string;
+  source?: string;
+  project?: string;
+};
+
+type LearningLogData = {
+  entries: LearningLogEntry[];
+};
+
+async function loadLearningLogFile(): Promise<LearningLogData> {
+  try {
+    const raw = await readFile(LEARNING_LOG_FILE, 'utf-8');
+    const parsed = JSON.parse(raw) as LearningLogData;
+    if (!parsed || !Array.isArray(parsed.entries)) return { entries: [] };
+    return { entries: parsed.entries };
+  } catch {
+    return { entries: [] };
+  }
+}
+
+async function saveLearningLogFile(data: LearningLogData): Promise<void> {
+  const { writeFile, mkdir } = await import('node:fs/promises');
+  const { dirname } = await import('node:path');
+  await mkdir(dirname(LEARNING_LOG_FILE), { recursive: true });
+  await writeFile(LEARNING_LOG_FILE, JSON.stringify(data, null, 2));
+}
+
+function isLearningLogEntryType(value: unknown): value is LearningLogEntryType {
+  return value === 'error' || value === 'learning' || value === 'feature';
+}
+
+app.get('/api/learning-log', async (_req, res) => {
+  try {
+    const data = await loadLearningLogFile();
+    res.json(data);
+  } catch {
+    res.status(500).json({ error: 'Failed to load learning log' });
+  }
+});
+
+app.post('/api/learning-log', async (req, res) => {
+  try {
+    const body = req.body as Partial<LearningLogEntry>;
+    if (!body || !isLearningLogEntryType(body.type) || typeof body.category !== 'string' || typeof body.text !== 'string') {
+      res.status(400).json({ error: 'Invalid entry' });
+      return;
+    }
+    const data = await loadLearningLogFile();
+    const entry: LearningLogEntry = {
+      id: crypto.randomUUID(),
+      type: body.type,
+      category: body.category.trim(),
+      text: body.text.trim(),
+      date: new Date().toISOString().slice(0, 10),
+      source: typeof body.source === 'string' && body.source.trim() ? body.source.trim() : 'manual',
+      project: typeof body.project === 'string' && body.project.trim() ? body.project.trim() : 'general',
+    };
+    data.entries.push(entry);
+    await saveLearningLogFile(data);
+    res.json(entry);
+  } catch {
+    res.status(500).json({ error: 'Failed to save entry' });
+  }
+});
+
 // ---- Memory API ----
 app.get('/api/memory', async (_req, res) => {
   try {
