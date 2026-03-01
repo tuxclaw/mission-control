@@ -154,6 +154,7 @@ function drawChart(
 }
 
 export function SystemDash() {
+  const apiBase = (import.meta.env.VITE_VITALS_API_URL ?? '').replace(/\/$/, '');
   const [stats, setStats] = useState<SystemStats | null>(null);
   const [connected, setConnected] = useState(false);
   const [cpuPeriod, setCpuPeriod] = useState<HistoryPeriod>('1h');
@@ -179,8 +180,12 @@ export function SystemDash() {
     let alive = true;
 
     const connect = () => {
-      const proto = window.location.protocol === 'https:' ? 'wss' : 'ws';
-      ws = new WebSocket(`${proto}://${window.location.host}/ws/system`);
+      const base = apiBase
+        ? new URL(apiBase, window.location.origin)
+        : new URL(window.location.origin);
+      const wsBase = new URL(base.toString());
+      wsBase.protocol = wsBase.protocol === 'https:' ? 'wss:' : 'ws:';
+      ws = new WebSocket(new URL('/ws/system', wsBase).toString());
 
       ws.onopen = () => {
         if (!alive) return;
@@ -192,8 +197,8 @@ export function SystemDash() {
         try {
           const data = JSON.parse(event.data) as SystemStats;
           setStats(data);
-        } catch {
-          // ignore
+        } catch (err) {
+          console.error('System stats WS parse error', err, event.data);
         }
       };
 
@@ -203,7 +208,8 @@ export function SystemDash() {
         reconnectTimer = window.setTimeout(connect, 3000);
       };
 
-      ws.onerror = () => {
+      ws.onerror = (event) => {
+        console.error('System stats WS error', event);
         ws?.close();
       };
     };
@@ -215,18 +221,18 @@ export function SystemDash() {
       if (reconnectTimer) window.clearTimeout(reconnectTimer);
       ws?.close();
     };
-  }, []);
+  }, [apiBase]);
 
   const refreshHistory = useCallback(async () => {
     const [cpuData, memData, gpuData] = await Promise.all([
-      fetch(`/api/system/history/${cpuPeriod}`).then((res) => res.json()).catch(() => []),
-      fetch(`/api/system/history/${memPeriod}`).then((res) => res.json()).catch(() => []),
-      fetch(`/api/system/gpu-history/${gpuPeriod}`).then((res) => res.json()).catch(() => []),
+      fetch(`${apiBase}/api/system/history/${cpuPeriod}`).then((res) => res.json()).catch(() => []),
+      fetch(`${apiBase}/api/system/history/${memPeriod}`).then((res) => res.json()).catch(() => []),
+      fetch(`${apiBase}/api/system/gpu-history/${gpuPeriod}`).then((res) => res.json()).catch(() => []),
     ]);
     setCpuHistory(cpuData as SystemHistoryPoint[]);
     setMemHistory(memData as SystemHistoryPoint[]);
     setGpuHistory(gpuData as SystemGpuHistoryPoint[]);
-  }, [cpuPeriod, memPeriod, gpuPeriod]);
+  }, [apiBase, cpuPeriod, memPeriod, gpuPeriod]);
 
   useEffect(() => {
     refreshHistory();
