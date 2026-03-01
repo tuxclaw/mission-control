@@ -25,4 +25,6 @@ dist-ssr
 
 # Environment
 .env
-data/
+data/missions.json
+data/ideas.json
+data/events.json

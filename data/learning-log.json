@@ -1,0 +1,157 @@
+{
+  "entries": [
+    {
+      "id": "e001",
+      "type": "error",
+      "category": "Agent Context",
+      "text": "Codex built REST endpoints in a project that wasn't using REST — had no context about the project's architecture.",
+      "date": "2026-02-21",
+      "source": "andy",
+      "project": "general"
+    },
+    {
+      "id": "e002",
+      "type": "error",
+      "category": "Agent Context",
+      "text": "Don't use Claude Code for tasks where Andy already has full context — just use edit/write tools directly, or dispatch to Buzz/Woody.",
+      "date": "2026-02-21",
+      "source": "andy",
+      "project": "general"
+    },
+    {
+      "id": "e003",
+      "type": "error",
+      "category": "Config Safety",
+      "text": "Never display openclaw.json raw — it contains secrets (API keys, bot tokens, gateway auth). Always filter with jq or redact.",
+      "date": "2026-02-15",
+      "source": "andy",
+      "project": "general"
+    },
+    {
+      "id": "e004",
+      "type": "error",
+      "category": "Config Safety",
+      "text": "Don't edit openclaw.json with jq pipe + mv — it can corrupt/revert the config and crash the gateway. Use openclaw config commands.",
+      "date": "2026-02-15",
+      "source": "andy",
+      "project": "general"
+    },
+    {
+      "id": "e005",
+      "type": "error",
+      "category": "Stale Closures",
+      "text": "Buzz missed chatModeRef in voice-chat app — same stale closure pattern he'd already fixed once. Recurring blind spot.",
+      "date": "2026-02-28",
+      "source": "sarge",
+      "project": "voice-chat"
+    },
+    {
+      "id": "e006",
+      "type": "error",
+      "category": "Local Models",
+      "text": "qwen3:14b spent 103s thinking then dumped fake JSON in content instead of using tool API. Local models unreliable for multi-step tool-calling.",
+      "date": "2026-02-16",
+      "source": "andy",
+      "project": "general"
+    },
+    {
+      "id": "e007",
+      "type": "error",
+      "category": "Local Models",
+      "text": "Synthetic tool-calling benchmarks don't predict real-world performance. Complex cron with tools → use Claude Sonnet or bash scripts.",
+      "date": "2026-02-16",
+      "source": "andy",
+      "project": "general"
+    },
+    {
+      "id": "l001",
+      "type": "learning",
+      "category": "Agent Workflow",
+      "text": "Always give full project context in prompts — stack, architecture, patterns, what NOT to do. Prevents agents from guessing wrong.",
+      "date": "2026-02-21",
+      "source": "andy",
+      "project": "general"
+    },
+    {
+      "id": "l002",
+      "type": "learning",
+      "category": "Agent Workflow",
+      "text": "For coding/build tasks, default to using the squad workflow (Buzz/Woody + Sarge review) rather than ad-hoc one-off Codex runs.",
+      "date": "2026-02-21",
+      "source": "andy",
+      "project": "general"
+    },
+    {
+      "id": "l003",
+      "type": "learning",
+      "category": "Agent Workflow",
+      "text": "Buzz ships fast and clean when given good context. Stale closures are his recurring blind spot — call it out in prompts.",
+      "date": "2026-02-28",
+      "source": "andy",
+      "project": "voice-chat"
+    },
+    {
+      "id": "l004",
+      "type": "learning",
+      "category": "Git & Branching",
+      "text": "Never push directly to main. Always feature branch (andy/<description>), test, then merge.",
+      "date": "2026-02-13",
+      "source": "andy",
+      "project": "general"
+    },
+    {
+      "id": "l005",
+      "type": "learning",
+      "category": "Development",
+      "text": "When we make changes to any app that has a Tauri version, always port changes to the Tauri version too.",
+      "date": "2026-02-28",
+      "source": "andy",
+      "project": "general"
+    },
+    {
+      "id": "l006",
+      "type": "learning",
+      "category": "Local Models",
+      "text": "Simple single-tool tasks → qwen3:8b/14b OK. Text generation only → any model. Complex multi-tool → cloud models only.",
+      "date": "2026-02-16",
+      "source": "andy",
+      "project": "general"
+    },
+    {
+      "id": "l007",
+      "type": "learning",
+      "category": "Infrastructure",
+      "text": "Bash scripts > AI for mechanical checks (disk, backup, etc). More reliable and cheaper.",
+      "date": "2026-02-16",
+      "source": "andy",
+      "project": "general"
+    },
+    {
+      "id": "f001",
+      "type": "feature",
+      "category": "Voice Chat",
+      "text": "Full voice pipeline working: mic → local Whisper STT → OpenAI-compatible LLM → MiniMax TTS → speaker. Push-to-talk with spacebar.",
+      "date": "2026-02-28",
+      "source": "buzz",
+      "project": "voice-chat"
+    },
+    {
+      "id": "f002",
+      "type": "feature",
+      "category": "Andy's Overview",
+      "text": "Packages tab tracks Fedora rawhide vs stable versions with color-coded status (current/outdated/missing/beta).",
+      "date": "2026-02-21",
+      "source": "buzz",
+      "project": "andys-overview"
+    },
+    {
+      "id": "f003",
+      "type": "feature",
+      "category": "Agentic Vault",
+      "text": "Credential proxy running — agents get scoped short-lived JWT tokens; vault proxies API calls with real secrets server-side.",
+      "date": "2026-02-20",
+      "source": "andy",
+      "project": "agentic-vault"
+    }
+  ]
+}
