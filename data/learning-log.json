@@ -4,7 +4,7 @@
       "id": "e001",
       "type": "error",
       "category": "Agent Context",
-      "text": "Codex built REST endpoints in a project that wasn't using REST — had no context about the project's architecture.",
+      "text": "Codex built REST endpoints in a project that wasn't using REST \u2014 had no context about the project's architecture.",
       "date": "2026-02-21",
       "source": "andy",
       "project": "general"
@@ -13,7 +13,7 @@
       "id": "e002",
       "type": "error",
       "category": "Agent Context",
-      "text": "Don't use Claude Code for tasks where Andy already has full context — just use edit/write tools directly, or dispatch to Buzz/Woody.",
+      "text": "Don't use Claude Code for tasks where Andy already has full context \u2014 just use edit/write tools directly, or dispatch to Buzz/Woody.",
       "date": "2026-02-21",
       "source": "andy",
       "project": "general"
@@ -22,7 +22,7 @@
       "id": "e003",
       "type": "error",
       "category": "Config Safety",
-      "text": "Never display openclaw.json raw — it contains secrets (API keys, bot tokens, gateway auth). Always filter with jq or redact.",
+      "text": "Never display openclaw.json raw \u2014 it contains secrets (API keys, bot tokens, gateway auth). Always filter with jq or redact.",
       "date": "2026-02-15",
       "source": "andy",
       "project": "general"
@@ -31,7 +31,7 @@
       "id": "e004",
       "type": "error",
       "category": "Config Safety",
-      "text": "Don't edit openclaw.json with jq pipe + mv — it can corrupt/revert the config and crash the gateway. Use openclaw config commands.",
+      "text": "Don't edit openclaw.json with jq pipe + mv \u2014 it can corrupt/revert the config and crash the gateway. Use openclaw config commands.",
       "date": "2026-02-15",
       "source": "andy",
       "project": "general"
@@ -40,7 +40,7 @@
       "id": "e005",
       "type": "error",
       "category": "Stale Closures",
-      "text": "Buzz missed chatModeRef in voice-chat app — same stale closure pattern he'd already fixed once. Recurring blind spot.",
+      "text": "Buzz missed chatModeRef in voice-chat app \u2014 same stale closure pattern he'd already fixed once. Recurring blind spot.",
       "date": "2026-02-28",
       "source": "sarge",
       "project": "voice-chat"
@@ -58,7 +58,7 @@
       "id": "e007",
       "type": "error",
       "category": "Local Models",
-      "text": "Synthetic tool-calling benchmarks don't predict real-world performance. Complex cron with tools → use Claude Sonnet or bash scripts.",
+      "text": "Synthetic tool-calling benchmarks don't predict real-world performance. Complex cron with tools \u2192 use Claude Sonnet or bash scripts.",
       "date": "2026-02-16",
       "source": "andy",
       "project": "general"
@@ -67,7 +67,7 @@
       "id": "l001",
       "type": "learning",
       "category": "Agent Workflow",
-      "text": "Always give full project context in prompts — stack, architecture, patterns, what NOT to do. Prevents agents from guessing wrong.",
+      "text": "Always give full project context in prompts \u2014 stack, architecture, patterns, what NOT to do. Prevents agents from guessing wrong.",
       "date": "2026-02-21",
       "source": "andy",
       "project": "general"
@@ -85,7 +85,7 @@
       "id": "l003",
       "type": "learning",
       "category": "Agent Workflow",
-      "text": "Buzz ships fast and clean when given good context. Stale closures are his recurring blind spot — call it out in prompts.",
+      "text": "Buzz ships fast and clean when given good context. Stale closures are his recurring blind spot \u2014 call it out in prompts.",
       "date": "2026-02-28",
       "source": "andy",
       "project": "voice-chat"
@@ -112,7 +112,7 @@
       "id": "l006",
       "type": "learning",
       "category": "Local Models",
-      "text": "Simple single-tool tasks → qwen3:8b/14b OK. Text generation only → any model. Complex multi-tool → cloud models only.",
+      "text": "Simple single-tool tasks \u2192 qwen3:8b/14b OK. Text generation only \u2192 any model. Complex multi-tool \u2192 cloud models only.",
       "date": "2026-02-16",
       "source": "andy",
       "project": "general"
@@ -130,7 +130,7 @@
       "id": "f001",
       "type": "feature",
       "category": "Voice Chat",
-      "text": "Full voice pipeline working: mic → local Whisper STT → OpenAI-compatible LLM → MiniMax TTS → speaker. Push-to-talk with spacebar.",
+      "text": "Full voice pipeline working: mic \u2192 local Whisper STT \u2192 OpenAI-compatible LLM \u2192 MiniMax TTS \u2192 speaker. Push-to-talk with spacebar.",
       "date": "2026-02-28",
       "source": "buzz",
       "project": "voice-chat"
@@ -148,10 +148,82 @@
       "id": "f003",
       "type": "feature",
       "category": "Agentic Vault",
-      "text": "Credential proxy running — agents get scoped short-lived JWT tokens; vault proxies API calls with real secrets server-side.",
+      "text": "Credential proxy running \u2014 agents get scoped short-lived JWT tokens; vault proxies API calls with real secrets server-side.",
       "date": "2026-02-20",
       "source": "andy",
       "project": "agentic-vault"
+    },
+    {
+      "id": "e008",
+      "type": "error",
+      "category": "WebSocket",
+      "text": "Multiple WebSocketServer instances on one HTTP server with path option causes 400 Bad Request. Use noServer: true with manual upgrade routing instead.",
+      "date": "2026-03-01",
+      "source": "buzz",
+      "project": "andys-overview"
+    },
+    {
+      "id": "e009",
+      "type": "error",
+      "category": "Vite Dev Server",
+      "text": "Vite proxy only handles HTTP by default. WebSocket paths need explicit proxy config with ws: true \u2014 otherwise WS connections hit the Vite server and fail.",
+      "date": "2026-03-01",
+      "source": "andy",
+      "project": "andys-overview"
+    },
+    {
+      "id": "e010",
+      "type": "error",
+      "category": "Vite Dev Server",
+      "text": "Restarting the backend server kills Vite dev server proxy connections, causing ECONNREFUSED errors. Vite doesn't auto-recover \u2014 needs manual restart.",
+      "date": "2026-03-01",
+      "source": "andy",
+      "project": "andys-overview"
+    },
+    {
+      "id": "l008",
+      "type": "learning",
+      "category": "SQL Safety",
+      "text": "sql.js exec() doesn't support parameterized queries. Use prepare() + bind() + step() + getAsObject() for safe parameterized access.",
+      "date": "2026-03-01",
+      "source": "sarge",
+      "project": "andys-overview"
+    },
+    {
+      "id": "l009",
+      "type": "learning",
+      "category": "Tauri Sync",
+      "text": "Tauri frontend components need API_BASE defaulting to http://localhost:3851, not empty string. Web version uses Vite proxy so empty works, Tauri has no proxy.",
+      "date": "2026-03-01",
+      "source": "andy",
+      "project": "andys-overview"
+    },
+    {
+      "id": "l010",
+      "type": "learning",
+      "category": "Agent Workflow",
+      "text": "Andy is the conductor, not a player. Delegate fixes to the squad instead of hand-editing code. Gather diagnostics, write precise prompts, dispatch.",
+      "date": "2026-03-01",
+      "source": "andy",
+      "project": "general"
+    },
+    {
+      "id": "f004",
+      "type": "feature",
+      "category": "Andy's Overview",
+      "text": "Learning Log tab \u2014 accordion categories, filter pills (errors/learnings/features), add entry form, server CRUD to data/learning-log.json.",
+      "date": "2026-03-01",
+      "source": "buzz",
+      "project": "andys-overview"
+    },
+    {
+      "id": "f005",
+      "type": "feature",
+      "category": "Andy's Overview",
+      "text": "System dashboard tab \u2014 real-time CPU/memory/disk/GPU monitoring via WebSocket, 32-core heatmap, canvas history charts, top processes, podman containers, SQLite metrics storage.",
+      "date": "2026-03-01",
+      "source": "buzz",
+      "project": "andys-overview"
     }
   ]
 }
