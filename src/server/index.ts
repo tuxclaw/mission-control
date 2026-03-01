@@ -364,7 +364,7 @@ app.post('/api/models/set', async (req, res) => {
 });
 
 // ---- WebSocket chat streaming ----
-const wss = new WebSocketServer({ server, path: '/ws/chat' });
+const wss = new WebSocketServer({ noServer: true });
 
 wss.on('connection', (ws) => {
   let inFlight = false;
@@ -1169,7 +1169,33 @@ function getSystemGpuHistory(minutes: number, card?: string | null): SqlRow[] {
 }
 
 const systemClients = new Set<WebSocket>();
-const systemWss = new WebSocketServer({ server, path: '/ws/system' });
+const systemWss = new WebSocketServer({ noServer: true });
+
+server.on('upgrade', (request, socket, head) => {
+  let pathname = '';
+  try {
+    ({ pathname } = new URL(request.url ?? '', 'http://localhost'));
+  } catch {
+    socket.destroy();
+    return;
+  }
+
+  if (pathname === '/ws/chat') {
+    wss.handleUpgrade(request, socket, head, (ws) => {
+      wss.emit('connection', ws, request);
+    });
+    return;
+  }
+
+  if (pathname === '/ws/system') {
+    systemWss.handleUpgrade(request, socket, head, (ws) => {
+      systemWss.emit('connection', ws, request);
+    });
+    return;
+  }
+
+  socket.destroy();
+});
 
 systemWss.on('connection', (ws) => {
   systemClients.add(ws);
