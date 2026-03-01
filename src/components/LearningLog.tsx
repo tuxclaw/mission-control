@@ -65,6 +65,15 @@ export function LearningLog() {
     loadEntries();
   }, [loadEntries]);
 
+  useEffect(() => {
+    if (!isAdding) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setIsAdding(false);
+    };
+    document.addEventListener('keydown', handler);
+    return () => document.removeEventListener('keydown', handler);
+  }, [isAdding]);
+
   const counts = useMemo(() => {
     return typeOrder.reduce<Record<LearningLogEntryType, number>>((acc, type) => {
       acc[type] = entries.filter(entry => entry.type === type).length;
@@ -170,7 +179,7 @@ export function LearningLog() {
             onClick={() => setIsAdding(true)}
           >
             <Plus size={14} aria-hidden="true" />
-            + Add Entry
+            Add Entry
           </button>
         </div>
       </header>

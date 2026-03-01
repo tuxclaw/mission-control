@@ -3146,7 +3146,8 @@ body {
   --learning-log-accent: var(--accent);
   --learning-log-accent-dim: var(--accent-dim);
   --learning-log-accent-glow: var(--accent-glow);
-  --learning-log-accent-soft: rgba(6, 182, 212, 0.12);
+  --learning-log-accent-ring: 0 0 0 1px var(--learning-log-accent-glow);
+  --learning-log-accent-soft: var(--learning-log-accent-glow);
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -3252,7 +3253,7 @@ body {
   background: var(--learning-log-accent-soft);
   border-color: var(--learning-log-accent-dim);
   color: var(--learning-log-accent);
-  box-shadow: 0 0 0 1px rgba(6, 182, 212, 0.25);
+  box-shadow: var(--learning-log-accent-ring);
 }
 
 .learning-log__filter:focus-visible {
@@ -3387,7 +3388,7 @@ body {
 .learning-log__badge--source {
   background: var(--learning-log-accent-soft);
   color: var(--learning-log-accent);
-  border-color: rgba(6, 182, 212, 0.3);
+  border-color: var(--learning-log-accent-dim);
 }
 
 .learning-log__entry-text {

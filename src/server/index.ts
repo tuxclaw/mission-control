@@ -1,6 +1,6 @@
 import express from 'express';
 import cors from 'cors';
-import { readFile, readdir } from 'node:fs/promises';
+import { readFile, readdir, writeFile, mkdir } from 'node:fs/promises';
 import { exec, execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { join } from 'node:path';
@@ -619,6 +619,7 @@ app.put('/api/missions', async (req, res) => {
 // ---- Learning Log API ----
 const LEARNING_LOG_FILE = join(REPO_ROOT, 'data/learning-log.json');
 
+// mirrors src/types.ts — keep in sync
 type LearningLogEntryType = 'error' | 'learning' | 'feature';
 type LearningLogEntry = {
   id: string;
@@ -646,9 +647,7 @@ async function loadLearningLogFile(): Promise<LearningLogData> {
 }
 
 async function saveLearningLogFile(data: LearningLogData): Promise<void> {
-  const { writeFile, mkdir } = await import('node:fs/promises');
-  const { dirname } = await import('node:path');
-  await mkdir(dirname(LEARNING_LOG_FILE), { recursive: true });
+  await mkdir(join(LEARNING_LOG_FILE, '..'), { recursive: true });
   await writeFile(LEARNING_LOG_FILE, JSON.stringify(data, null, 2));
 }
 
