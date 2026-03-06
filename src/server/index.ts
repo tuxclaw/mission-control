@@ -63,31 +63,44 @@ function logAgentParseFallback(stdout: string, reason: string) {
 }
 
 function findFallbackString(value: unknown): string | null {
-  const stack: unknown[] = [value];
+  const stack: Array<{ value: unknown; key?: string }> = [{ value }];
   const seen = new Set<unknown>();
   const strings: string[] = [];
+  const contentKeyStrings: string[] = [];
+  const contentKeys = new Set(['text', 'content', 'message', 'output', 'response']);
 
   while (stack.length > 0) {
     const current = stack.pop();
-    if (typeof current === 'string') {
-      const trimmed = current.trim();
-      if (trimmed) strings.push(trimmed);
+    if (!current) continue;
+    const { value: currentValue, key } = current;
+    if (typeof currentValue === 'string') {
+      const trimmed = currentValue.trim();
+      if (trimmed) {
+        strings.push(trimmed);
+        if (key && contentKeys.has(key)) {
+          contentKeyStrings.push(trimmed);
+        }
+      }
       continue;
     }
-    if (!current || typeof current !== 'object') continue;
-    if (seen.has(current)) continue;
-    seen.add(current);
+    if (typeof currentValue !== 'object') continue;
+    if (seen.has(currentValue)) continue;
+    seen.add(currentValue);
 
-    if (Array.isArray(current)) {
-      for (const item of current) stack.push(item);
+    if (Array.isArray(currentValue)) {
+      for (const item of currentValue) stack.push({ value: item });
     } else {
-      for (const item of Object.values(current as Record<string, unknown>)) {
-        stack.push(item);
+      for (const [childKey, item] of Object.entries(currentValue as Record<string, unknown>)) {
+        stack.push({ value: item, key: childKey });
       }
     }
   }
 
   if (strings.length === 0) return null;
+  const contentCandidates = contentKeyStrings.filter((str) => str.length >= 16);
+  if (contentCandidates.length > 0) {
+    return contentCandidates.sort((a, b) => b.length - a.length)[0] ?? null;
+  }
   const longStrings = strings.filter((str) => str.length >= 16);
   const candidates = longStrings.length > 0 ? longStrings : strings;
   return candidates.sort((a, b) => b.length - a.length)[0] ?? null;
@@ -112,8 +125,29 @@ function parseAgentResponse(stdout: string): { content: string; silent: boolean 
     if (Array.isArray(payloads) && payloads.length === 0) {
       content = '';
       silent = true;
-    } else if (payloads?.[0]?.text && typeof payloads[0].text === 'string') {
-      content = payloads[0].text;
+    } else if (Array.isArray(payloads)) {
+      const texts = payloads
+        .map((payload) => (typeof payload.text === 'string' ? payload.text : null))
+        .filter((text): text is string => text !== null);
+      if (texts.length > 0) {
+        content = texts.join('\n\n');
+      } else if (payloads.some((payload) => typeof payload.mediaUrl === 'string' && payload.mediaUrl)) {
+        content = '(media attachment)';
+      } else if (typeof record.text === 'string') {
+        content = record.text;
+      } else if (typeof record.content === 'string') {
+        content = record.content;
+      } else if (typeof result?.text === 'string') {
+        content = result.text as string;
+      } else {
+        logAgentParseFallback(raw, 'no matching structured fields');
+        const fallback = findFallbackString(parsed);
+        if (fallback) {
+          content = fallback;
+        } else if (raw.trim()) {
+          content = raw.trim();
+        }
+      }
     } else if (typeof record.text === 'string') {
       content = record.text;
     } else if (typeof record.content === 'string') {
