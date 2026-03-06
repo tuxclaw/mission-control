@@ -75,7 +75,7 @@ function drawChart(
     return;
   }
 
-  const values = data.map((d) => (d as Record<string, number>)[valueKey] ?? 0);
+  const values = data.map((d) => (d as unknown as Record<string, number>)[valueKey] ?? 0);
   const maxVal = 100;
   const minVal = 0;
   const timeMin = data[0]?.timestamp ?? 0;
@@ -137,7 +137,7 @@ function drawChart(
   ctx.lineJoin = 'round';
   ctx.stroke();
 
-  const last = data[data.length - 1] as Record<string, number> | undefined;
+  const last = data[data.length - 1] as unknown as Record<string, number> | undefined;
   if (last) {
     const x = pad.left + plotW;
     const y = pad.top + plotH - (((last[valueKey] ?? 0) - minVal) / (maxVal - minVal)) * plotH;
