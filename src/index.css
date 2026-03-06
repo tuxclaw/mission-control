@@ -642,6 +642,16 @@ body {
   50.01%, 100% { opacity: 0; }
 }
 
+.chat-msg--streaming {
+  border-color: var(--accent-dim);
+  animation: chatStreamPulse 1.5s ease-in-out infinite;
+}
+
+@keyframes chatStreamPulse {
+  0%, 100% { border-color: var(--accent-dim); }
+  50% { border-color: var(--accent); }
+}
+
 /* === CHAT SESSION BAR === */
 .chat-session-bar {
   background: var(--bg-secondary);
