@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef } from 'react';
-import { marked } from 'marked';
+import { marked, type Tokens } from 'marked';
 import hljs from 'highlight.js';
 
 type ChatMarkdownProps = {
@@ -19,13 +19,23 @@ export function ChatMarkdown({ content }: ChatMarkdownProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
 
   const html = useMemo(() => {
-    const detectedLanguages: string[] = [];
     const renderer = new marked.Renderer();
 
-    renderer.code = (code, infostring) => {
-      const rawInfo = (infostring ?? '').trim();
-      const explicitLang = rawInfo ? rawInfo.split(/\s+/)[0] : '';
-      const langLabel = detectedLanguages.shift() ?? (explicitLang || 'text');
+    renderer.code = ({ text, lang }: Tokens.Code) => {
+      const rawLang = (lang ?? '').split(/\s+/)[0] || '';
+      let highlighted: string;
+      let langLabel: string;
+
+      if (rawLang && hljs.getLanguage(rawLang)) {
+        const result = hljs.highlight(text, { language: rawLang, ignoreIllegals: true });
+        highlighted = result.value;
+        langLabel = result.language ?? rawLang;
+      } else {
+        const result = hljs.highlightAuto(text);
+        highlighted = result.value;
+        langLabel = result.language ?? 'text';
+      }
+
       const safeLabel = escapeHtml(langLabel);
       const langClass = langLabel ? `language-${langLabel}` : '';
 
@@ -35,7 +45,7 @@ export function ChatMarkdown({ content }: ChatMarkdownProps) {
         `<span class="chat-code-block__lang">${safeLabel}</span>`,
         '<button class="chat-code-block__copy" type="button">Copy</button>',
         '</div>',
-        `<pre><code class="hljs ${langClass}">${code}</code></pre>`,
+        `<pre><code class="hljs ${langClass}">${highlighted}</code></pre>`,
         '</div>',
       ].join('');
     };
@@ -45,17 +55,7 @@ export function ChatMarkdown({ content }: ChatMarkdownProps) {
       breaks: true,
       gfm: true,
       renderer,
-      highlight: (code, lang) => {
-        if (lang && hljs.getLanguage(lang)) {
-          const result = hljs.highlight(code, { language: lang, ignoreIllegals: true });
-          detectedLanguages.push(result.language ?? lang);
-          return result.value;
-        }
-        const result = hljs.highlightAuto(code);
-        detectedLanguages.push(result.language ?? 'text');
-        return result.value;
-      },
-    });
+    }) as string;
 
     return stripScripts(raw);
   }, [content]);
