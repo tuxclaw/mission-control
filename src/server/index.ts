@@ -497,6 +497,8 @@ wss.on('connection', (ws) => {
         'agent', '--session-id', chatSessionId, '-m', message,
       ], { timeout: 120000 });
 
+      sendWs(ws, { type: 'thinking' });
+
       let stdout = '';
       let stderr = '';
 

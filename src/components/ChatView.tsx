@@ -53,6 +53,7 @@ export function ChatView() {
   const [connected, setConnected] = useState(false);
   const [connectionState, setConnectionState] = useState<ConnectionState>('reconnecting');
   const [sending, setSending] = useState(false);
+  const [thinking, setThinking] = useState(false);
   const [streamingId, setStreamingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [emojiPickerOpen, setEmojiPickerOpen] = useState(false);
@@ -211,16 +212,23 @@ export function ChatView() {
         }
         if (!payload?.type) return;
 
+        if (payload.type === 'thinking') {
+          setThinking(true);
+        }
         if (payload.type === 'token' && typeof payload.token === 'string') {
+          setThinking(false);
           handleTokenRef.current(payload.token);
         }
         if (payload.type === 'message' && typeof payload.content === 'string') {
+          setThinking(false);
           handleMessageRef.current(payload.content);
         }
         if (payload.type === 'done') {
+          setThinking(false);
           handleDoneRef.current();
         }
         if (payload.type === 'error' && typeof payload.message === 'string') {
+          setThinking(false);
           handleErrorRef.current(payload.message);
         }
       });
@@ -557,7 +565,7 @@ export function ChatView() {
           </div>
         ))}
 
-        {sending && streamingId === null && (
+        {(sending || thinking) && streamingId === null && (
           <div className="chat-bubble" style={{ display: 'flex', gap: 8, alignSelf: 'flex-start' }}>
             <div
               className="chat-avatar chat-avatar--agent"
@@ -575,9 +583,16 @@ export function ChatView() {
                 <Bot size={14} />
               </span>
             </div>
-            <div className="chat-msg chat-msg--agent" style={{ padding: '10px 14px', borderRadius: 12 }}>
-              <div className="chat-typing-dots" role="status" aria-label="Andy is typing">
-                <span>•</span><span>•</span><span>•</span>
+            <div className={`chat-msg chat-msg--agent ${thinking ? 'chat-thinking' : ''}`} style={{ padding: '10px 14px', borderRadius: 12 }}>
+              <div className={thinking ? 'chat-thinking-indicator' : 'chat-typing-dots'} role="status" aria-label={thinking ? 'Andy is thinking' : 'Andy is typing'}>
+                {thinking ? (
+                  <>
+                    <span className="chat-thinking-pulse" />
+                    <span className="chat-thinking-label">Thinking...</span>
+                  </>
+                ) : (
+                  <><span>•</span><span>•</span><span>•</span></>
+                )}
               </div>
             </div>
           </div>

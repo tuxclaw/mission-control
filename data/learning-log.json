@@ -4,7 +4,7 @@
       "id": "e001",
       "type": "error",
       "category": "Agent Context",
-      "text": "Codex built REST endpoints in a project that wasn't using REST \u2014 had no context about the project's architecture.",
+      "text": "Codex built REST endpoints in a project that wasn't using REST — had no context about the project's architecture.",
       "date": "2026-02-21",
       "source": "andy",
       "project": "general"
@@ -13,7 +13,7 @@
       "id": "e002",
       "type": "error",
       "category": "Agent Context",
-      "text": "Don't use Claude Code for tasks where Andy already has full context \u2014 just use edit/write tools directly, or dispatch to Buzz/Woody.",
+      "text": "Don't use Claude Code for tasks where Andy already has full context — just use edit/write tools directly, or dispatch to Buzz/Woody.",
       "date": "2026-02-21",
       "source": "andy",
       "project": "general"
@@ -22,7 +22,7 @@
       "id": "e003",
       "type": "error",
       "category": "Config Safety",
-      "text": "Never display openclaw.json raw \u2014 it contains secrets (API keys, bot tokens, gateway auth). Always filter with jq or redact.",
+      "text": "Never display openclaw.json raw — it contains secrets (API keys, bot tokens, gateway auth). Always filter with jq or redact.",
       "date": "2026-02-15",
       "source": "andy",
       "project": "general"
@@ -31,7 +31,7 @@
       "id": "e004",
       "type": "error",
       "category": "Config Safety",
-      "text": "Don't edit openclaw.json with jq pipe + mv \u2014 it can corrupt/revert the config and crash the gateway. Use openclaw config commands.",
+      "text": "Don't edit openclaw.json with jq pipe + mv — it can corrupt/revert the config and crash the gateway. Use openclaw config commands.",
       "date": "2026-02-15",
       "source": "andy",
       "project": "general"
@@ -40,7 +40,7 @@
       "id": "e005",
       "type": "error",
       "category": "Stale Closures",
-      "text": "Buzz missed chatModeRef in voice-chat app \u2014 same stale closure pattern he'd already fixed once. Recurring blind spot.",
+      "text": "Buzz missed chatModeRef in voice-chat app — same stale closure pattern he'd already fixed once. Recurring blind spot.",
       "date": "2026-02-28",
       "source": "sarge",
       "project": "voice-chat"
@@ -58,7 +58,7 @@
       "id": "e007",
       "type": "error",
       "category": "Local Models",
-      "text": "Synthetic tool-calling benchmarks don't predict real-world performance. Complex cron with tools \u2192 use Claude Sonnet or bash scripts.",
+      "text": "Synthetic tool-calling benchmarks don't predict real-world performance. Complex cron with tools → use Claude Sonnet or bash scripts.",
       "date": "2026-02-16",
       "source": "andy",
       "project": "general"
@@ -67,7 +67,7 @@
       "id": "l001",
       "type": "learning",
       "category": "Agent Workflow",
-      "text": "Always give full project context in prompts \u2014 stack, architecture, patterns, what NOT to do. Prevents agents from guessing wrong.",
+      "text": "Always give full project context in prompts — stack, architecture, patterns, what NOT to do. Prevents agents from guessing wrong.",
       "date": "2026-02-21",
       "source": "andy",
       "project": "general"
@@ -85,7 +85,7 @@
       "id": "l003",
       "type": "learning",
       "category": "Agent Workflow",
-      "text": "Buzz ships fast and clean when given good context. Stale closures are his recurring blind spot \u2014 call it out in prompts.",
+      "text": "Buzz ships fast and clean when given good context. Stale closures are his recurring blind spot — call it out in prompts.",
       "date": "2026-02-28",
       "source": "andy",
       "project": "voice-chat"
@@ -112,7 +112,7 @@
       "id": "l006",
       "type": "learning",
       "category": "Local Models",
-      "text": "Simple single-tool tasks \u2192 qwen3:8b/14b OK. Text generation only \u2192 any model. Complex multi-tool \u2192 cloud models only.",
+      "text": "Simple single-tool tasks → qwen3:8b/14b OK. Text generation only → any model. Complex multi-tool → cloud models only.",
       "date": "2026-02-16",
       "source": "andy",
       "project": "general"
@@ -130,7 +130,7 @@
       "id": "f001",
       "type": "feature",
       "category": "Voice Chat",
-      "text": "Full voice pipeline working: mic \u2192 local Whisper STT \u2192 OpenAI-compatible LLM \u2192 MiniMax TTS \u2192 speaker. Push-to-talk with spacebar.",
+      "text": "Full voice pipeline working: mic → local Whisper STT → OpenAI-compatible LLM → MiniMax TTS → speaker. Push-to-talk with spacebar.",
       "date": "2026-02-28",
       "source": "buzz",
       "project": "voice-chat"
@@ -148,7 +148,7 @@
       "id": "f003",
       "type": "feature",
       "category": "Agentic Vault",
-      "text": "Credential proxy running \u2014 agents get scoped short-lived JWT tokens; vault proxies API calls with real secrets server-side.",
+      "text": "Credential proxy running — agents get scoped short-lived JWT tokens; vault proxies API calls with real secrets server-side.",
       "date": "2026-02-20",
       "source": "andy",
       "project": "agentic-vault"
@@ -166,7 +166,7 @@
       "id": "e009",
       "type": "error",
       "category": "Vite Dev Server",
-      "text": "Vite proxy only handles HTTP by default. WebSocket paths need explicit proxy config with ws: true \u2014 otherwise WS connections hit the Vite server and fail.",
+      "text": "Vite proxy only handles HTTP by default. WebSocket paths need explicit proxy config with ws: true — otherwise WS connections hit the Vite server and fail.",
       "date": "2026-03-01",
       "source": "andy",
       "project": "andys-overview"
@@ -175,7 +175,7 @@
       "id": "e010",
       "type": "error",
       "category": "Vite Dev Server",
-      "text": "Restarting the backend server kills Vite dev server proxy connections, causing ECONNREFUSED errors. Vite doesn't auto-recover \u2014 needs manual restart.",
+      "text": "Restarting the backend server kills Vite dev server proxy connections, causing ECONNREFUSED errors. Vite doesn't auto-recover — needs manual restart.",
       "date": "2026-03-01",
       "source": "andy",
       "project": "andys-overview"
@@ -202,7 +202,7 @@
       "id": "l010",
       "type": "learning",
       "category": "Agent Workflow",
-      "text": "Andy is 'The Conductor' \u2014 conductors don't play instruments, they conduct. ALWAYS delegate coding work to assigned agents (Buzz, Woody, etc). Andy's job: oversee, dispatch, review, and be available for Tux. Create new agents (Toy Story themed) if needed, but never do the coding yourself.",
+      "text": "Andy is 'The Conductor' — conductors don't play instruments, they conduct. ALWAYS delegate coding work to assigned agents (Buzz, Woody, etc). Andy's job: oversee, dispatch, review, and be available for Tux. Create new agents (Toy Story themed) if needed, but never do the coding yourself.",
       "date": "2026-03-01",
       "source": "andy",
       "project": "general"
@@ -211,7 +211,7 @@
       "id": "f004",
       "type": "feature",
       "category": "Andy's Overview",
-      "text": "Learning Log tab \u2014 accordion categories, filter pills (errors/learnings/features), add entry form, server CRUD to data/learning-log.json.",
+      "text": "Learning Log tab — accordion categories, filter pills (errors/learnings/features), add entry form, server CRUD to data/learning-log.json.",
       "date": "2026-03-01",
       "source": "buzz",
       "project": "andys-overview"
@@ -220,7 +220,7 @@
       "id": "f005",
       "type": "feature",
       "category": "Andy's Overview",
-      "text": "System dashboard tab \u2014 real-time CPU/memory/disk/GPU monitoring via WebSocket, 32-core heatmap, canvas history charts, top processes, podman containers, SQLite metrics storage.",
+      "text": "System dashboard tab — real-time CPU/memory/disk/GPU monitoring via WebSocket, 32-core heatmap, canvas history charts, top processes, podman containers, SQLite metrics storage.",
       "date": "2026-03-01",
       "source": "buzz",
       "project": "andys-overview"
@@ -229,7 +229,7 @@
       "id": "l026",
       "type": "lesson",
       "category": "API Integration",
-      "text": "Coinbase SDK returns typed objects (not dicts) \u2014 .get() fails but getattr works. Always test against real API responses, not just dict assumptions.",
+      "text": "Coinbase SDK returns typed objects (not dicts) — .get() fails but getattr works. Always test against real API responses, not just dict assumptions.",
       "date": "2026-03-04",
       "source": "andy",
       "project": "crypto-trader"
@@ -247,7 +247,7 @@
       "id": "l028",
       "type": "error",
       "category": "Trading Safety",
-      "text": "Stop-loss logic blocked ALL orders including sells \u2014 should only block buys. A stop-loss should trigger a sell, not prevent one.",
+      "text": "Stop-loss logic blocked ALL orders including sells — should only block buys. A stop-loss should trigger a sell, not prevent one.",
       "date": "2026-03-04",
       "source": "sarge",
       "project": "crypto-trader"
@@ -274,7 +274,7 @@
       "id": "l030",
       "type": "lesson",
       "category": "Testing",
-      "text": "Tests using date.today() are timezone-dependent \u2014 will fail when local date != UTC date (every evening PST). Always use datetime.now(timezone.utc).date() in tests that interact with UTC-based code.",
+      "text": "Tests using date.today() are timezone-dependent — will fail when local date != UTC date (every evening PST). Always use datetime.now(timezone.utc).date() in tests that interact with UTC-based code.",
       "date": "2026-03-04",
       "source": "sarge",
       "project": "crypto-trader"
@@ -292,7 +292,7 @@
       "id": "l031",
       "type": "lesson",
       "category": "Process Management",
-      "text": "Background exec sessions have timeouts \u2014 engines/servers die when the session expires. For persistent services, use systemd or detach properly from the session lifecycle.",
+      "text": "Background exec sessions have timeouts — engines/servers die when the session expires. For persistent services, use systemd or detach properly from the session lifecycle.",
       "date": "2026-03-04",
       "source": "andy",
       "project": "crypto-trader"
@@ -310,7 +310,7 @@
       ],
       "type": "error",
       "id": "c1423e00-046a-4a98-ab9d-31e6ad1b0815",
-      "text": "Discord blocks Python urllib default User-Agent \u2014 Discord webhooks return 403 Forbidden when called with Python's default `Python-urllib/3.x` User-Agent. curl works fine because it sends a normal UA. Fix: set a custom User-Agent header on webhook requests.",
+      "text": "Discord blocks Python urllib default User-Agent — Discord webhooks return 403 Forbidden when called with Python's default `Python-urllib/3.x` User-Agent. curl works fine because it sends a normal UA. Fix: set a custom User-Agent header on webhook requests.",
       "source": "andy",
       "project": "general"
     },
@@ -327,7 +327,7 @@
       ],
       "type": "learning",
       "id": "cd523134-acca-49d0-bc01-b5233230a6a8",
-      "text": "SQLite row_factory race condition in FastAPI thread pool \u2014 SQLite connection with check_same_thread=False shared across FastAPI's sync endpoint thread pool can lose row_factory setting, causing IndexError when accessing rows as dicts. Fix: add threading.Lock and re-set row_factory before every query.",
+      "text": "SQLite row_factory race condition in FastAPI thread pool — SQLite connection with check_same_thread=False shared across FastAPI's sync endpoint thread pool can lose row_factory setting, causing IndexError when accessing rows as dicts. Fix: add threading.Lock and re-set row_factory before every query.",
       "source": "andy",
       "project": "general"
     },
@@ -344,7 +344,7 @@
       ],
       "type": "learning",
       "id": "5a18c8d5-45a1-44be-bb04-02171a402086",
-      "text": "Serve frontend static files from FastAPI (single port) \u2014 Instead of running a separate Vite dev server in production, build the frontend and serve via FastAPI's StaticFiles mount. Single port for API + UI. Frontend BASE_PATH switches between '/api' (dev proxy) and '' (production, same origin).",
+      "text": "Serve frontend static files from FastAPI (single port) — Instead of running a separate Vite dev server in production, build the frontend and serve via FastAPI's StaticFiles mount. Single port for API + UI. Frontend BASE_PATH switches between '/api' (dev proxy) and '' (production, same origin).",
       "source": "andy",
       "project": "general"
     },
@@ -361,7 +361,7 @@
       ],
       "type": "learning",
       "id": "77a3e261-0a3a-444a-8c00-db7efcf5f46f",
-      "text": "Env var override gotcha: empty string vs unset \u2014 os.getenv('VAR', 'fallback') returns '' (not fallback) when VAR is set but empty in .env. This silently overrode a valid TOML config value for the Discord webhook URL. Lesson: use `os.getenv('VAR') or fallback` pattern, or don't set empty env vars.",
+      "text": "Env var override gotcha: empty string vs unset — os.getenv('VAR', 'fallback') returns '' (not fallback) when VAR is set but empty in .env. This silently overrode a valid TOML config value for the Discord webhook URL. Lesson: use `os.getenv('VAR') or fallback` pattern, or don't set empty env vars.",
       "source": "andy",
       "project": "general"
     },
@@ -377,7 +377,7 @@
       ],
       "type": "learning",
       "id": "ec39634f-b20b-40b2-9337-095a290139ac",
-      "text": "Cron delivery needs explicit channel with multi-channel configs \u2014 OpenClaw cron jobs with delivery.mode='announce' fail when multiple channels (telegram, discord) are configured without specifying delivery.channel. Fix: set channel explicitly in the delivery config.",
+      "text": "Cron delivery needs explicit channel with multi-channel configs — OpenClaw cron jobs with delivery.mode='announce' fail when multiple channels (telegram, discord) are configured without specifying delivery.channel. Fix: set channel explicitly in the delivery config.",
       "source": "andy",
       "project": "general"
     },
@@ -394,7 +394,7 @@
       ],
       "type": "learning",
       "id": "1c956fbb-53a5-40c6-b828-1539ec3aae40",
-      "text": "Position sizing must match asset prices \u2014 max_position_usd of $100-$3000 is meaningless for BTC where ATR-based sizing creates ~$8K+ notional positions. Orchestrator signals were silently risk-blocked for weeks. Always validate risk limits against actual position sizes at current asset prices.",
+      "text": "Position sizing must match asset prices — max_position_usd of $100-$3000 is meaningless for BTC where ATR-based sizing creates ~$8K+ notional positions. Orchestrator signals were silently risk-blocked for weeks. Always validate risk limits against actual position sizes at current asset prices.",
       "source": "andy",
       "project": "general"
     },
@@ -402,7 +402,7 @@
       "date": "2026-03-05",
       "category": "trading",
       "title": "Backtest bugs can hide strategy performance",
-      "description": "Backtest engine never forwarded allow_short to PaperTradingEngine \u2014 short signals silently blocked. Combined with undersized max_position, orchestrator showed 0 trades in backtests, making it look broken when it was actually generating good signals.",
+      "description": "Backtest engine never forwarded allow_short to PaperTradingEngine — short signals silently blocked. Combined with undersized max_position, orchestrator showed 0 trades in backtests, making it look broken when it was actually generating good signals.",
       "tags": [
         "crypto",
         "backtesting",
@@ -411,7 +411,7 @@
       ],
       "type": "learning",
       "id": "5a0f5a16-11ed-431a-beda-60b472a287cf",
-      "text": "Backtest bugs can hide strategy performance \u2014 Backtest engine never forwarded allow_short to PaperTradingEngine \u2014 short signals silently blocked. Combined with undersized max_position, orchestrator showed 0 trades in backtests, making it look broken when it was actually generating good signals.",
+      "text": "Backtest bugs can hide strategy performance — Backtest engine never forwarded allow_short to PaperTradingEngine — short signals silently blocked. Combined with undersized max_position, orchestrator showed 0 trades in backtests, making it look broken when it was actually generating good signals.",
       "source": "andy",
       "project": "general"
     },
@@ -428,7 +428,7 @@
       ],
       "type": "learning",
       "id": "e34d65e3-1e57-425a-b25d-581d82e31122",
-      "text": "Tight risk per trade + proper sizing = best risk-adjusted returns \u2014 Backtesting 12 months of BTC/ETH data: 0.5% risk per trade with proper position sizing (+55%, 0.98 Sharpe on BTC) beat aggressive configs. Tighter stops (1.0 ATR vs 1.5) and higher ADX thresholds (25 vs 20) improved quality of trades.",
+      "text": "Tight risk per trade + proper sizing = best risk-adjusted returns — Backtesting 12 months of BTC/ETH data: 0.5% risk per trade with proper position sizing (+55%, 0.98 Sharpe on BTC) beat aggressive configs. Tighter stops (1.0 ATR vs 1.5) and higher ADX thresholds (25 vs 20) improved quality of trades.",
       "source": "andy",
       "project": "general"
     },
@@ -445,7 +445,52 @@
       ],
       "type": "error",
       "id": "1e478917-b544-4e4d-8707-0accef44420e",
-      "text": "Cap indicator window for backtest speedup \u2014 Backtest engine was passing full candle history to indicators on every tick. Capping to last 500 candles gave 23x speedup (10min to 26sec for 12-month orchestrator run) with identical results.",
+      "text": "Cap indicator window for backtest speedup — Backtest engine was passing full candle history to indicators on every tick. Capping to last 500 candles gave 23x speedup (10min to 26sec for 12-month orchestrator run) with identical results.",
+      "source": "andy",
+      "project": "general"
+    },
+    {
+      "id": "3f46e95f-0b14-41d9-95ca-01ea2be2b601",
+      "type": "learning",
+      "category": "architecture",
+      "text": "Dynamic agent status tracking: use a shared status.json file that the orchestrator writes to on dispatch/completion, with process detection as a fallback (30min timeout). Trusting the file over process checks avoids false negatives during startup.",
+      "date": "2026-03-06",
+      "source": "andy",
+      "project": "andys-overview"
+    },
+    {
+      "id": "7f4245d8-b23f-4ccf-a870-10d15ba52c04",
+      "type": "learning",
+      "category": "workflow",
+      "text": "Follow dispatch protocol: dont hand-code features yourself when squad agents should do the work. Conductor conducts, agents build. Even for partial/WIP work, commit to branch and hand off.",
+      "date": "2026-03-06",
+      "source": "andy",
+      "project": "general"
+    },
+    {
+      "id": "l-20260306-01",
+      "type": "learning",
+      "category": "Build",
+      "text": "cargo build --release does NOT embed frontend assets in Tauri. Only cargo tauri build embeds dist/ into the binary. Without it, the webview shows Connection Refused (falls back to devUrl).",
+      "date": "2026-03-06",
+      "source": "andy",
+      "project": "andys-overview"
+    },
+    {
+      "id": "l-20260306-02",
+      "type": "learning",
+      "category": "React",
+      "text": "Ref-wrap WebSocket handlers to prevent stale closures. Store in useRef, update .current each render, call handlerRef.current() from WS listener. Sarge review caught this pattern.",
+      "date": "2026-03-06",
+      "source": "sarge",
+      "project": "andys-overview"
+    },
+    {
+      "id": "l-20260306-03",
+      "type": "learning",
+      "category": "Process",
+      "text": "The Conductor rule works: dispatch to squad, let them build, Sarge reviews, Andy applies fixes and deploys. Caught a real bug (missing busy guard) that would have shipped without review.",
+      "date": "2026-03-06",
       "source": "andy",
       "project": "general"
     }

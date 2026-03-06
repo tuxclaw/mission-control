@@ -31,8 +31,8 @@ export default function App() {
         <div className="flex-1 flex min-h-0">
           {sidebarOpen && <Sidebar selectedAgent={selectedAgent} onSelectAgent={setSelectedAgent} collapsed={false} onToggle={toggleSidebar} />}
           <main className="flex-1 flex flex-col min-h-0">
-            {activeTab === 'chat' && <ChatView />}
-            {activeTab === 'system' && <SystemDash />}
+            <div className="flex-1 flex flex-col min-h-0" style={{ display: activeTab === 'chat' ? undefined : 'none' }}><ChatView /></div>
+            <div className="flex-1 flex flex-col min-h-0" style={{ display: activeTab === 'system' ? undefined : 'none' }}><SystemDash /></div>
             {activeTab === 'missions' && <MissionBoard />}
             {activeTab === 'ideas' && <IdeaBoard />}
             {activeTab === 'learning-log' && <LearningLog />}
