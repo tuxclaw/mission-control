@@ -412,6 +412,24 @@ body {
   color: var(--text-muted);
 }
 
+.agent-task {
+  color: var(--text-secondary);
+}
+
+.agent-task__label {
+  color: var(--accent-primary);
+  font-weight: 500;
+}
+
+.agent-task__project {
+  color: var(--text-muted);
+}
+
+.agent-task__elapsed {
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
 .sidebar__footer {
   border-color: var(--border);
   color: var(--text-muted);
@@ -3550,7 +3568,7 @@ body {
   flex-direction: column;
   gap: 20px;
   overflow-y: auto;
-  background: linear-gradient(180deg, rgba(15, 17, 25, 0.9), rgba(10, 10, 15, 0.9));
+  background: var(--bg-primary);
 }
 
 .sysdash__header {

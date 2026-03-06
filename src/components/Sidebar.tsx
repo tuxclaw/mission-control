@@ -22,6 +22,8 @@ interface AgentItemProps {
 }
 
 const AgentItem = memo(function AgentItem({ agent, selected, onSelect }: AgentItemProps) {
+  const isWorking = agent.status === 'active' && agent.task;
+
   return (
     <button
       role="option"
@@ -45,10 +47,18 @@ const AgentItem = memo(function AgentItem({ agent, selected, onSelect }: AgentIt
           <span className="text-sm font-medium truncate">{agent.name}</span>
           <span className="agent-model-badge text-[10px] px-1.5 py-0.5 rounded font-mono">{agent.model}</span>
         </div>
-        <div className="agent-role text-xs mt-0.5">
-          {agent.role}
-          {agent.sessionAge && <span> · {agent.sessionAge}</span>}
-        </div>
+        {isWorking ? (
+          <div className="agent-task text-xs mt-0.5">
+            <span className="agent-task__label truncate" title={agent.task ?? ''}>{agent.task}</span>
+            {agent.project && <span className="agent-task__project"> · {agent.project}</span>}
+            {agent.elapsed && <span className="agent-task__elapsed"> · {agent.elapsed}</span>}
+          </div>
+        ) : (
+          <div className="agent-role text-xs mt-0.5">
+            {agent.role}
+            {agent.sessionAge && <span> · {agent.sessionAge}</span>}
+          </div>
+        )}
       </div>
 
       {selected && <ChevronRight size={14} className="status-muted" aria-hidden="true" />}
