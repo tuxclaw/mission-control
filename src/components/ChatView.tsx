@@ -444,7 +444,7 @@ export function ChatView() {
         <div ref={endRef} />
       </div>
 
-      <div className="chat-input-wrap" style={{ padding: 12, borderTop: '1px solid var(--border)', marginBottom: 64 }}>
+      <div className="chat-input-wrap" style={{ padding: 12, borderTop: '1px solid var(--border)' }}>
         <div className="chat-input-box" style={{ display: 'flex', gap: 8, alignItems: 'center', borderRadius: 12, padding: '8px 12px' }}>
           <input
             className="chat-input"
