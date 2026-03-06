@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { Bot, Plus, Send, Smile, Trash2, User } from 'lucide-react';
+import { Bot, Copy, Plus, Send, Smile, Trash2, User } from 'lucide-react';
+import { ChatMarkdown } from './ChatMarkdown';
 
 interface ChatMsg {
   id: string;
@@ -56,6 +57,7 @@ export function ChatView() {
   const [error, setError] = useState<string | null>(null);
   const [emojiPickerOpen, setEmojiPickerOpen] = useState(false);
   const [emojiCategory, setEmojiCategory] = useState<(typeof EMOJI_CATEGORIES)[number]['key']>('smileys');
+  const [copiedId, setCopiedId] = useState<string | null>(null);
 
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimerRef = useRef<number | null>(null);
@@ -63,9 +65,10 @@ export function ChatView() {
   const streamingIdRef = useRef<string | null>(null);
   const shouldReconnectRef = useRef(true);
   const endRef = useRef<HTMLDivElement | null>(null);
-  const inputRef = useRef<HTMLInputElement | null>(null);
+  const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const emojiPickerRef = useRef<HTMLDivElement | null>(null);
   const emojiButtonRef = useRef<HTMLButtonElement | null>(null);
+  const copyTimeoutRef = useRef<number | null>(null);
 
   const setStreaming = useCallback((id: string | null) => {
     streamingIdRef.current = id;
@@ -316,6 +319,20 @@ export function ChatView() {
     });
   };
 
+  const adjustInputHeight = useCallback(() => {
+    const inputEl = inputRef.current;
+    if (!inputEl) return;
+    inputEl.style.height = 'auto';
+    const styles = window.getComputedStyle(inputEl);
+    const lineHeight = Number.parseFloat(styles.lineHeight || '20');
+    const paddingTop = Number.parseFloat(styles.paddingTop || '0');
+    const paddingBottom = Number.parseFloat(styles.paddingBottom || '0');
+    const maxHeight = lineHeight * 5 + paddingTop + paddingBottom;
+    const nextHeight = Math.min(inputEl.scrollHeight, maxHeight);
+    inputEl.style.height = `${Math.max(nextHeight, lineHeight + paddingTop + paddingBottom)}px`;
+    inputEl.style.overflowY = inputEl.scrollHeight > maxHeight ? 'auto' : 'hidden';
+  }, []);
+
   const handleSend = () => {
     const text = input.trim();
     if (!text) return;
@@ -339,6 +356,27 @@ export function ChatView() {
     persistMessage(userMsg);
     wsRef.current.send(JSON.stringify({ message: text }));
   };
+
+  const handleCopyMessage = (msg: ChatMsg) => {
+    navigator.clipboard.writeText(msg.content).catch(() => {});
+    setCopiedId(msg.id);
+    if (copyTimeoutRef.current) {
+      window.clearTimeout(copyTimeoutRef.current);
+    }
+    copyTimeoutRef.current = window.setTimeout(() => {
+      setCopiedId(null);
+    }, 2000);
+  };
+
+  useEffect(() => {
+    adjustInputHeight();
+  }, [adjustInputHeight, input]);
+
+  useEffect(() => () => {
+    if (copyTimeoutRef.current) {
+      window.clearTimeout(copyTimeoutRef.current);
+    }
+  }, []);
 
   const busy = sending || streamingId !== null;
   const canSend = input.trim().length > 0 && connected && !busy;
@@ -454,37 +492,67 @@ export function ChatView() {
         {messages.map(msg => (
           <div
             key={msg.id}
-            className="chat-bubble"
             style={{
               display: 'flex',
-              gap: 8,
+              flexDirection: 'column',
               maxWidth: '85%',
               alignSelf: msg.role === 'user' ? 'flex-end' : 'flex-start',
-              flexDirection: msg.role === 'user' ? 'row-reverse' : 'row',
+              gap: 2,
             }}
           >
             <div
-              className={`chat-avatar ${msg.role === 'agent' ? 'chat-avatar--agent' : 'chat-avatar--user'}`}
+              className="chat-bubble"
               style={{
-                width: 32,
-                height: 32,
-                borderRadius: 8,
                 display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                flexShrink: 0,
+                gap: 8,
+                flexDirection: msg.role === 'user' ? 'row-reverse' : 'row',
+                alignItems: 'flex-start',
               }}
             >
-              <span className="chat-avatar__icon">
-                {msg.role === 'agent' ? <Bot size={14} /> : <User size={14} />}
-              </span>
+              <div
+                className={`chat-avatar ${msg.role === 'agent' ? 'chat-avatar--agent' : 'chat-avatar--user'}`}
+                style={{
+                  width: 32,
+                  height: 32,
+                  borderRadius: 8,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexShrink: 0,
+                }}
+              >
+                <span className="chat-avatar__icon">
+                  {msg.role === 'agent' ? <Bot size={14} /> : <User size={14} />}
+                </span>
+              </div>
+              <div
+                className={`chat-msg ${msg.role === 'agent' ? 'chat-msg--agent' : 'chat-msg--user'} ${msg.streaming ? 'chat-msg--streaming' : ''}`}
+                style={{ padding: '10px 14px', borderRadius: 12, fontSize: 14, lineHeight: 1.5 }}
+              >
+                {msg.role === 'agent' && !msg.streaming ? (
+                  <ChatMarkdown content={msg.content} />
+                ) : (
+                  msg.content
+                )}
+                {msg.streaming && <span className="chat-stream-cursor" aria-hidden="true" />}
+                {msg.role === 'agent' && (
+                  <button
+                    type="button"
+                    className={`chat-msg__copy ${copiedId === msg.id ? 'chat-msg__copy--active' : ''}`}
+                    onClick={() => handleCopyMessage(msg)}
+                    aria-label="Copy message"
+                  >
+                    <Copy size={14} />
+                    <span className="chat-msg__copy-tooltip">Copied!</span>
+                  </button>
+                )}
+              </div>
             </div>
             <div
-              className={`chat-msg ${msg.role === 'agent' ? 'chat-msg--agent' : 'chat-msg--user'} ${msg.streaming ? 'chat-msg--streaming' : ''}`}
-              style={{ padding: '10px 14px', borderRadius: 12, fontSize: 14, lineHeight: 1.5 }}
+              className="chat-timestamp"
+              style={{ alignSelf: msg.role === 'user' ? 'flex-end' : 'flex-start' }}
             >
-              {msg.content}
-              {msg.streaming && <span className="chat-stream-cursor" aria-hidden="true" />}
+              {msg.timestamp.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true })}
             </div>
           </div>
         ))}
@@ -552,13 +620,13 @@ export function ChatView() {
           </div>
         )}
         <div className="chat-input-box" style={{ display: 'flex', gap: 8, alignItems: 'center', borderRadius: 12, padding: '8px 12px' }}>
-          <input
+          <textarea
             className="chat-input"
             ref={inputRef}
             value={input}
             onChange={e => setInput(e.target.value)}
             onKeyDown={e => {
-              if (e.key === 'Enter') {
+              if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
                 if (canSend) handleSend();
               }
@@ -568,7 +636,16 @@ export function ChatView() {
             autoComplete="off"
             aria-busy={busy}
             aria-label="Message input"
-            style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', fontSize: 16, padding: '4px 0' }}
+            rows={1}
+            style={{
+              flex: 1,
+              background: 'transparent',
+              border: 'none',
+              outline: 'none',
+              fontSize: 16,
+              padding: '4px 0',
+              resize: 'none',
+            }}
           />
           <button
             ref={emojiButtonRef}
