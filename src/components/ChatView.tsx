@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { Bot, Send, Trash2, User } from 'lucide-react';
+import { Bot, Plus, Send, Trash2, User } from 'lucide-react';
 
 interface ChatMsg {
   id: string;
@@ -297,7 +297,37 @@ export function ChatView() {
           <span className={`chat-connection-dot ${connectionDotClass}`} aria-label={connectionLabel} />
           <span className="chat-session-bar__model">{connectionLabel}</span>
           <span className="chat-session-bar__tokens">WebSocket</span>
-          <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center' }}>
+          <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6 }}>
+            <button
+              type="button"
+              onClick={() => {
+                fetch('/api/chat/new-session', { method: 'POST' })
+                  .then(() => {
+                    setMessages([]);
+                    setStreaming(null);
+                    streamingIdRef.current = null;
+                    setError(null);
+                  })
+                  .catch(() => {});
+              }}
+              aria-label="New session"
+              title="Start a new chat session"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                border: '1px solid var(--border)',
+                background: 'transparent',
+                color: 'inherit',
+                padding: '4px 8px',
+                borderRadius: 8,
+                fontSize: 12,
+                cursor: 'pointer',
+              }}
+            >
+              <Plus size={14} />
+              New
+            </button>
             <button
               type="button"
               onClick={() => {
@@ -322,6 +352,7 @@ export function ChatView() {
                 padding: '4px 8px',
                 borderRadius: 8,
                 fontSize: 12,
+                cursor: 'pointer',
               }}
             >
               <Trash2 size={14} />

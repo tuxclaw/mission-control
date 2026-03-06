@@ -262,6 +262,23 @@ function formatExecError(err: unknown): string {
   return [info.message, info.stdout, info.stderr].filter(Boolean).join('\n').trim();
 }
 
+// ---- Chat session management ----
+let chatSessionId = `ao-chat-${Date.now()}`;
+
+app.get('/api/chat/session', (_req, res) => {
+  res.json({ sessionId: chatSessionId });
+});
+
+app.post('/api/chat/new-session', (_req, res) => {
+  chatSessionId = `ao-chat-${Date.now()}`;
+  // Clear persisted messages for a fresh start
+  if (systemDb) {
+    systemDb.run('DELETE FROM chat_messages');
+    saveSystemDb();
+  }
+  res.json({ ok: true, sessionId: chatSessionId });
+});
+
 app.post('/api/chat', async (req, res) => {
   try {
     const { message } = req.body as { message?: string };
@@ -272,7 +289,7 @@ app.post('/api/chat', async (req, res) => {
 
     const { stdout } = await execFileAsync(
       'openclaw',
-      ['agent', '--session-id', 'andys-overview-chat', '--json', '-m', message],
+      ['agent', '--session-id', chatSessionId, '--json', '-m', message],
       { timeout: 60000 },
     );
 
@@ -477,7 +494,7 @@ wss.on('connection', (ws) => {
     try {
       const { spawn } = await import('child_process');
       const child = spawn('openclaw', [
-        'agent', '--session-id', 'andys-overview-chat', '--json', '-m', message,
+        'agent', '--session-id', chatSessionId, '--json', '-m', message,
       ], { timeout: 120000 });
 
       let stdout = '';
