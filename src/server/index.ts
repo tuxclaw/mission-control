@@ -534,11 +534,15 @@ wss.on('connection', (ws) => {
           }
 
           let content = '(no response)';
+          let silent = false;
           try {
             const parsed = JSON.parse(stdout) as Record<string, unknown>;
             const result = parsed.result as Record<string, unknown> | undefined;
             const payloads = result?.payloads as Array<Record<string, unknown>> | undefined;
-            if (payloads?.[0]?.text && typeof payloads[0].text === 'string') {
+            if (Array.isArray(payloads) && payloads.length === 0) {
+              content = '';
+              silent = true;
+            } else if (payloads?.[0]?.text && typeof payloads[0].text === 'string') {
               content = payloads[0].text;
             } else if (typeof parsed.text === 'string') {
               content = parsed.text;
@@ -547,13 +551,22 @@ wss.on('connection', (ws) => {
             } else if (typeof result?.text === 'string') {
               content = result.text as string;
             } else {
-              content = stdout.trim() || '(no response)';
+              content = '(no response)';
             }
           } catch {
-            content = stdout.trim() || '(no response)';
+            content = '(no response)';
           }
 
-          sendWs(ws, { type: 'message', content });
+          if (content === 'NO_REPLY') {
+            content = '';
+            silent = true;
+          } else if (content.trim() === '') {
+            silent = true;
+          }
+
+          if (!silent) {
+            sendWs(ws, { type: 'message', content });
+          }
           sendWs(ws, { type: 'done' });
           resolve();
         });

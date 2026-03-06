@@ -108,6 +108,9 @@ export function ChatView() {
 
   const handleMessageRef = useRef((_content: string) => {});
   handleMessageRef.current = (content: string) => {
+    if (content === 'NO_REPLY' || content.trim() === '') {
+      return;
+    }
     setSending(false);
     let persistPayload: ChatMsg | null = null;
     const now = new Date();
@@ -138,7 +141,10 @@ export function ChatView() {
   handleDoneRef.current = () => {
     setSending(false);
     const currentId = streamingIdRef.current;
-    if (!currentId) return;
+    if (!currentId) {
+      setStreaming(null);
+      return;
+    }
     let persistPayload: ChatMsg | null = null;
     setMessages(prev => prev.map(msg => {
       if (msg.id !== currentId) return msg;
