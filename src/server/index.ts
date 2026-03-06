@@ -469,23 +469,14 @@ async function loadAgentStatus(): Promise<AgentStatusFile> {
   }
 }
 
-async function detectRunningCodexProcesses(): Promise<Map<string, number>> {
-  const running = new Map<string, number>();
+async function hasRunningCodexProcess(): Promise<boolean> {
   try {
     const { stdout } = await execFileAsync('pgrep', ['-a', '-f', 'codex'], { timeout: 3000 });
-    const lines = stdout.trim().split('\n').filter(Boolean);
-    for (const line of lines) {
-      const parts = line.split(/\s+/);
-      const pid = Number(parts[0]);
-      // codex exec processes indicate an active coding agent
-      if (line.includes('codex') && line.includes('exec') && !Number.isNaN(pid)) {
-        running.set(line, pid);
-      }
-    }
+    return stdout.trim().length > 0;
   } catch {
     // No codex processes running — that's fine
+    return false;
   }
-  return running;
 }
 
 function formatElapsed(startedAt: string | null): string | null {
@@ -504,13 +495,12 @@ function formatElapsed(startedAt: string | null): string | null {
 
 app.get('/api/agents', async (_req, res) => {
   try {
-    const [statusFile, andyModel, codexProcs] = await Promise.all([
+    const [statusFile, andyModel, hasCodexRunning] = await Promise.all([
       loadAgentStatus(),
       getPrimaryModel(),
-      detectRunningCodexProcesses(),
+      hasRunningCodexProcess(),
     ]);
 
-    const hasCodexRunning = codexProcs.size > 0;
     const modelStr = andyModel ? extractModelName(andyModel) : 'opus';
 
     const agents = SQUAD_ROSTER.map((roster) => {
@@ -537,26 +527,14 @@ app.get('/api/agents', async (_req, res) => {
       let project = statusEntry?.project ?? null;
       let startedAt = statusEntry?.startedAt ?? null;
 
-      // For Codex agents (Buzz/Woody): verify with process detection
-      // Only auto-downgrade after 2min with no codex process (gives time for startup)
+      // For Codex agents (Buzz/Woody): rely on status file, only auto-downgrade
+      // if a startedAt exists and there have been no codex processes for 30+ minutes.
       if (roster.engine === 'codex' && status === 'active') {
-        const startMs = startedAt ? new Date(startedAt).getTime() : 0;
-        const elapsed = Date.now() - startMs;
-        const hasPid = statusEntry?.pid;
+        const startMs = startedAt ? new Date(startedAt).getTime() : NaN;
+        const elapsed = Number.isNaN(startMs) ? 0 : Date.now() - startMs;
 
-        if (hasPid) {
-          // If we have a PID, check if it's still alive
-          try {
-            process.kill(statusEntry.pid!, 0);
-          } catch {
-            // PID is gone — agent finished
-            status = 'idle';
-            task = null;
-            project = null;
-            startedAt = null;
-          }
-        } else if (!hasCodexRunning && elapsed > 2 * 60 * 1000) {
-          // No PID tracked, no codex running, and it's been > 2min — likely done
+        if (startedAt && !hasCodexRunning && elapsed > 30 * 60 * 1000) {
+          // No codex running for 30+ minutes after start — likely done
           status = 'idle';
           task = null;
           project = null;

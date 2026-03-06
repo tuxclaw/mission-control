@@ -28,3 +28,4 @@ dist-ssr
 data/missions.json
 data/ideas.json
 data/events.json
+data/metrics.db

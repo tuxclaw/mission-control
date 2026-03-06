@@ -29,7 +29,7 @@ const AgentItem = memo(function AgentItem({ agent, selected, onSelect }: AgentIt
       role="option"
       aria-selected={selected}
       onClick={() => onSelect(agent.id)}
-      className={`agent-btn w-full flex items-center gap-3 px-3 py-3 rounded-lg text-left cursor-pointer ${selected ? 'agent-btn--selected' : ''}`}
+      className={`agent-btn w-full flex items-center gap-3 px-3 py-3 rounded-lg text-left cursor-pointer ${selected ? 'agent-btn--selected' : ''} ${agent.status === 'active' ? 'agent-btn--active' : ''}`}
     >
       <div className="relative">
         <div className={`agent-avatar w-9 h-9 rounded-lg flex items-center justify-center ${agent.status === 'active' ? 'agent-avatar--active' : 'agent-avatar--inactive'}`}>
