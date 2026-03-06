@@ -457,7 +457,7 @@ app.post('/api/chat', async (req, res) => {
 
     const { stdout } = await execFileAsync(
       'openclaw',
-      ['agent', '--session-id', chatSessionId, '--json', '-m', message],
+      ['agent', '--json', '-m', message],
       { timeout: 60000 },
     );
 
@@ -687,7 +687,7 @@ wss.on('connection', (ws) => {
     try {
       const { spawn } = await import('child_process');
       const child = spawn('openclaw', [
-        'agent', '--session-id', chatSessionId, '--json', '-m', message,
+        'agent', '--json', '-m', message,
       ], { timeout: 120000 });
 
       let stdout = '';
