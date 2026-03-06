@@ -400,7 +400,24 @@ function formatExecError(err: unknown): string {
 }
 
 // ---- Chat session management ----
+const CHAT_SESSION_KEY = 'chat.session_id';
 let chatSessionId = `ao-chat-${Date.now()}`;
+
+function loadChatSessionId(): string | null {
+  if (!systemDb) return null;
+  const result = systemDb.exec('SELECT value FROM system_config WHERE key = ?', [CHAT_SESSION_KEY]);
+  const value = result.length > 0 ? result[0].values[0]?.[0] : null;
+  return typeof value === 'string' && value.trim() ? value : null;
+}
+
+function persistChatSessionId(sessionId: string) {
+  if (!systemDb) return;
+  systemDb.run(
+    'INSERT OR REPLACE INTO system_config (key, value) VALUES (?, ?)',
+    [CHAT_SESSION_KEY, sessionId],
+  );
+  saveSystemDb();
+}
 
 app.get('/api/chat/session', (_req, res) => {
   res.json({ sessionId: chatSessionId });
@@ -408,11 +425,7 @@ app.get('/api/chat/session', (_req, res) => {
 
 app.post('/api/chat/new-session', (_req, res) => {
   chatSessionId = `ao-chat-${Date.now()}`;
-  // Clear persisted messages for a fresh start
-  if (systemDb) {
-    systemDb.run('DELETE FROM chat_messages');
-    saveSystemDb();
-  }
+  persistChatSessionId(chatSessionId);
   res.json({ ok: true, sessionId: chatSessionId });
 });
 
@@ -1405,9 +1418,23 @@ async function initSystemDb(path: string) {
     )
   `);
 
+  systemDb.run(`
+    CREATE TABLE IF NOT EXISTS system_config (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL
+    )
+  `);
+
   systemDb.run('CREATE INDEX IF NOT EXISTS idx_chat_messages_ts ON chat_messages(timestamp)');
   systemDb.run('CREATE INDEX IF NOT EXISTS idx_gpu_metrics_ts ON gpu_metrics(timestamp)');
   systemDb.run('CREATE INDEX IF NOT EXISTS idx_metrics_ts ON metrics(timestamp)');
+
+  const storedChatSessionId = loadChatSessionId();
+  if (storedChatSessionId) {
+    chatSessionId = storedChatSessionId;
+  } else {
+    persistChatSessionId(chatSessionId);
+  }
 
   pruneSystemDb();
   saveSystemDb();
