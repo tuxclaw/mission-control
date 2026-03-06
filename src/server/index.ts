@@ -432,6 +432,168 @@ wss.on('connection', (ws) => {
   });
 });
 
+// ---- Squad Agents API (dynamic status) ----
+const AGENTS_STATUS_FILE = join(WORKSPACE, 'agents/status.json');
+
+interface AgentStatusEntry {
+  status: 'active' | 'idle';
+  task: string | null;
+  project: string | null;
+  startedAt: string | null;
+  pid?: number | null;
+  sessionKey?: string | null;
+  lastRun?: string | null;
+}
+
+interface AgentStatusFile {
+  agents: Record<string, AgentStatusEntry>;
+  updatedAt: string | null;
+}
+
+const SQUAD_ROSTER = [
+  { id: 'andy-main', name: 'Andy ⚡', defaultModel: 'opus', role: 'Orchestrator', engine: 'openclaw' },
+  { id: 'buzz', name: 'Buzz 🚀', defaultModel: 'codex', role: 'Coding Agent', engine: 'codex' },
+  { id: 'woody', name: 'Woody 🤠', defaultModel: 'codex', role: 'Coding Agent', engine: 'codex' },
+  { id: 'sarge', name: 'Sarge 🎖️', defaultModel: 'opus', role: 'Code Review', engine: 'subagent' },
+  { id: 'trixie', name: 'Trixie 🎨', defaultModel: 'claude', role: 'UI/Design', engine: 'subagent' },
+  { id: 'jessie', name: 'Jessie 🔍', defaultModel: 'sonnet', role: 'Research', engine: 'subagent' },
+  { id: 'slink', name: 'Slink 🐕', defaultModel: 'sonnet', role: 'Trading Monitor', engine: 'cron' },
+];
+
+async function loadAgentStatus(): Promise<AgentStatusFile> {
+  try {
+    const raw = await readFile(AGENTS_STATUS_FILE, 'utf-8');
+    return JSON.parse(raw) as AgentStatusFile;
+  } catch {
+    return { agents: {}, updatedAt: null };
+  }
+}
+
+async function hasRunningCodexProcess(): Promise<boolean> {
+  try {
+    const { stdout } = await execFileAsync('pgrep', ['-a', '-f', 'codex'], { timeout: 3000 });
+    return stdout.trim().length > 0;
+  } catch {
+    // No codex processes running — that's fine
+    return false;
+  }
+}
+
+function formatElapsed(startedAt: string | null): string | null {
+  if (!startedAt) return null;
+  const startMs = new Date(startedAt).getTime();
+  if (Number.isNaN(startMs)) return null;
+  const diffMs = Math.max(0, Date.now() - startMs);
+  const mins = Math.floor(diffMs / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ${mins % 60}m`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ${hours % 24}h`;
+}
+
+app.get('/api/agents', async (_req, res) => {
+  try {
+    const [statusFile, andyModel, hasCodexRunning] = await Promise.all([
+      loadAgentStatus(),
+      getPrimaryModel(),
+      hasRunningCodexProcess(),
+    ]);
+
+    const modelStr = andyModel ? extractModelName(andyModel) : 'opus';
+
+    const agents = SQUAD_ROSTER.map((roster) => {
+      const statusEntry = statusFile.agents[roster.id];
+
+      // Andy is always active if main session exists
+      if (roster.id === 'andy-main') {
+        return {
+          id: roster.id,
+          name: roster.name,
+          model: modelStr,
+          status: 'active' as const,
+          role: roster.role,
+          task: null,
+          project: null,
+          startedAt: null,
+          elapsed: null,
+        };
+      }
+
+      // Determine status from file + process verification
+      let status: 'active' | 'idle' = statusEntry?.status ?? 'idle';
+      let task = statusEntry?.task ?? null;
+      let project = statusEntry?.project ?? null;
+      let startedAt = statusEntry?.startedAt ?? null;
+
+      // For Codex agents (Buzz/Woody): rely on status file, only auto-downgrade
+      // if a startedAt exists and there have been no codex processes for 30+ minutes.
+      if (roster.engine === 'codex' && status === 'active') {
+        const startMs = startedAt ? new Date(startedAt).getTime() : NaN;
+        const elapsed = Number.isNaN(startMs) ? 0 : Date.now() - startMs;
+
+        if (startedAt && !hasCodexRunning && elapsed > 30 * 60 * 1000) {
+          // No codex running for 30+ minutes after start — likely done
+          status = 'idle';
+          task = null;
+          project = null;
+          startedAt = null;
+        }
+      }
+
+      return {
+        id: roster.id,
+        name: roster.name,
+        model: roster.defaultModel,
+        status,
+        role: roster.role,
+        task,
+        project,
+        startedAt,
+        elapsed: status === 'active' ? formatElapsed(startedAt) : null,
+      };
+    });
+
+    res.json(agents);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Failed to load agents';
+    res.status(500).json({ error: msg });
+  }
+});
+
+app.put('/api/agents/:id/status', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const body = req.body as Partial<AgentStatusEntry>;
+    const statusFile = await loadAgentStatus();
+
+    if (!statusFile.agents[id]) {
+      statusFile.agents[id] = {
+        status: 'idle',
+        task: null,
+        project: null,
+        startedAt: null,
+      };
+    }
+
+    const entry = statusFile.agents[id]!;
+    if (body.status !== undefined) entry.status = body.status;
+    if (body.task !== undefined) entry.task = body.task;
+    if (body.project !== undefined) entry.project = body.project;
+    if (body.startedAt !== undefined) entry.startedAt = body.startedAt;
+    if (body.pid !== undefined) entry.pid = body.pid;
+    if (body.sessionKey !== undefined) entry.sessionKey = body.sessionKey;
+    statusFile.updatedAt = new Date().toISOString();
+
+    await writeFile(AGENTS_STATUS_FILE, JSON.stringify(statusFile, null, 2));
+    res.json({ ok: true });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Failed to update agent status';
+    res.status(500).json({ error: msg });
+  }
+});
+
 app.get('/api/sessions', async (_req, res) => {
   try {
     const upstream = await fetch(`${GATEWAY_URL}/api/agents/main/sessions`, {

@@ -202,7 +202,7 @@
       "id": "l010",
       "type": "learning",
       "category": "Agent Workflow",
-      "text": "Andy is the conductor, not a player. Delegate fixes to the squad instead of hand-editing code. Gather diagnostics, write precise prompts, dispatch.",
+      "text": "Andy is 'The Conductor' \u2014 conductors don't play instruments, they conduct. ALWAYS delegate coding work to assigned agents (Buzz, Woody, etc). Andy's job: oversee, dispatch, review, and be available for Tux. Create new agents (Toy Story themed) if needed, but never do the coding yourself.",
       "date": "2026-03-01",
       "source": "andy",
       "project": "general"
@@ -224,6 +224,230 @@
       "date": "2026-03-01",
       "source": "buzz",
       "project": "andys-overview"
+    },
+    {
+      "id": "l026",
+      "type": "lesson",
+      "category": "API Integration",
+      "text": "Coinbase SDK returns typed objects (not dicts) \u2014 .get() fails but getattr works. Always test against real API responses, not just dict assumptions.",
+      "date": "2026-03-04",
+      "source": "andy",
+      "project": "crypto-trader"
+    },
+    {
+      "id": "l027",
+      "type": "lesson",
+      "category": "Trading Safety",
+      "text": "Paper trading must enforce the same risk checks as live trading, otherwise paper results are misleading and dangerous. Always inject RiskManager into both engines.",
+      "date": "2026-03-04",
+      "source": "sarge",
+      "project": "crypto-trader"
+    },
+    {
+      "id": "l028",
+      "type": "error",
+      "category": "Trading Safety",
+      "text": "Stop-loss logic blocked ALL orders including sells \u2014 should only block buys. A stop-loss should trigger a sell, not prevent one.",
+      "date": "2026-03-04",
+      "source": "sarge",
+      "project": "crypto-trader"
+    },
+    {
+      "id": "f006",
+      "type": "lesson",
+      "category": "Agent Workflow",
+      "text": "Smoke-testing API connectivity before code review catches bugs reviewers miss (reading code vs running code). Do both.",
+      "date": "2026-03-04",
+      "source": "andy",
+      "project": "crypto-trader"
+    },
+    {
+      "id": "l029",
+      "type": "lesson",
+      "category": "SDK Integration",
+      "text": "Coinbase SDK returns typed objects, not dicts. Always check hasattr + getattr patterns alongside dict access. SDK candle granularity uses string enums (FIVE_MINUTE) not ints (300).",
+      "date": "2026-03-04",
+      "source": "andy",
+      "project": "crypto-trader"
+    },
+    {
+      "id": "l030",
+      "type": "lesson",
+      "category": "Testing",
+      "text": "Tests using date.today() are timezone-dependent \u2014 will fail when local date != UTC date (every evening PST). Always use datetime.now(timezone.utc).date() in tests that interact with UTC-based code.",
+      "date": "2026-03-04",
+      "source": "sarge",
+      "project": "crypto-trader"
+    },
+    {
+      "id": "f007",
+      "type": "lesson",
+      "category": "Agent Workflow",
+      "text": "Config field name mismatches (macd_signal vs macd_signal_period) break **vars() unpacking. When using dataclass splat, verify field names match exactly between config and target class.",
+      "date": "2026-03-04",
+      "source": "andy",
+      "project": "crypto-trader"
+    },
+    {
+      "id": "l031",
+      "type": "lesson",
+      "category": "Process Management",
+      "text": "Background exec sessions have timeouts \u2014 engines/servers die when the session expires. For persistent services, use systemd or detach properly from the session lifecycle.",
+      "date": "2026-03-04",
+      "source": "andy",
+      "project": "crypto-trader"
+    },
+    {
+      "date": "2026-03-05",
+      "category": "debugging",
+      "title": "Discord blocks Python urllib default User-Agent",
+      "description": "Discord webhooks return 403 Forbidden when called with Python's default `Python-urllib/3.x` User-Agent. curl works fine because it sends a normal UA. Fix: set a custom User-Agent header on webhook requests.",
+      "tags": [
+        "discord",
+        "webhooks",
+        "python",
+        "debugging"
+      ],
+      "type": "error",
+      "id": "c1423e00-046a-4a98-ab9d-31e6ad1b0815",
+      "text": "Discord blocks Python urllib default User-Agent \u2014 Discord webhooks return 403 Forbidden when called with Python's default `Python-urllib/3.x` User-Agent. curl works fine because it sends a normal UA. Fix: set a custom User-Agent header on webhook requests.",
+      "source": "andy",
+      "project": "general"
+    },
+    {
+      "date": "2026-03-05",
+      "category": "architecture",
+      "title": "SQLite row_factory race condition in FastAPI thread pool",
+      "description": "SQLite connection with check_same_thread=False shared across FastAPI's sync endpoint thread pool can lose row_factory setting, causing IndexError when accessing rows as dicts. Fix: add threading.Lock and re-set row_factory before every query.",
+      "tags": [
+        "sqlite",
+        "fastapi",
+        "threading",
+        "race-condition"
+      ],
+      "type": "learning",
+      "id": "cd523134-acca-49d0-bc01-b5233230a6a8",
+      "text": "SQLite row_factory race condition in FastAPI thread pool \u2014 SQLite connection with check_same_thread=False shared across FastAPI's sync endpoint thread pool can lose row_factory setting, causing IndexError when accessing rows as dicts. Fix: add threading.Lock and re-set row_factory before every query.",
+      "source": "andy",
+      "project": "general"
+    },
+    {
+      "date": "2026-03-05",
+      "category": "architecture",
+      "title": "Serve frontend static files from FastAPI (single port)",
+      "description": "Instead of running a separate Vite dev server in production, build the frontend and serve via FastAPI's StaticFiles mount. Single port for API + UI. Frontend BASE_PATH switches between '/api' (dev proxy) and '' (production, same origin).",
+      "tags": [
+        "fastapi",
+        "vite",
+        "deployment",
+        "architecture"
+      ],
+      "type": "learning",
+      "id": "5a18c8d5-45a1-44be-bb04-02171a402086",
+      "text": "Serve frontend static files from FastAPI (single port) \u2014 Instead of running a separate Vite dev server in production, build the frontend and serve via FastAPI's StaticFiles mount. Single port for API + UI. Frontend BASE_PATH switches between '/api' (dev proxy) and '' (production, same origin).",
+      "source": "andy",
+      "project": "general"
+    },
+    {
+      "date": "2026-03-05",
+      "category": "devops",
+      "title": "Env var override gotcha: empty string vs unset",
+      "description": "os.getenv('VAR', 'fallback') returns '' (not fallback) when VAR is set but empty in .env. This silently overrode a valid TOML config value for the Discord webhook URL. Lesson: use `os.getenv('VAR') or fallback` pattern, or don't set empty env vars.",
+      "tags": [
+        "python",
+        "dotenv",
+        "configuration",
+        "gotcha"
+      ],
+      "type": "learning",
+      "id": "77a3e261-0a3a-444a-8c00-db7efcf5f46f",
+      "text": "Env var override gotcha: empty string vs unset \u2014 os.getenv('VAR', 'fallback') returns '' (not fallback) when VAR is set but empty in .env. This silently overrode a valid TOML config value for the Discord webhook URL. Lesson: use `os.getenv('VAR') or fallback` pattern, or don't set empty env vars.",
+      "source": "andy",
+      "project": "general"
+    },
+    {
+      "date": "2026-03-05",
+      "category": "devops",
+      "title": "Cron delivery needs explicit channel with multi-channel configs",
+      "description": "OpenClaw cron jobs with delivery.mode='announce' fail when multiple channels (telegram, discord) are configured without specifying delivery.channel. Fix: set channel explicitly in the delivery config.",
+      "tags": [
+        "openclaw",
+        "cron",
+        "configuration"
+      ],
+      "type": "learning",
+      "id": "ec39634f-b20b-40b2-9337-095a290139ac",
+      "text": "Cron delivery needs explicit channel with multi-channel configs \u2014 OpenClaw cron jobs with delivery.mode='announce' fail when multiple channels (telegram, discord) are configured without specifying delivery.channel. Fix: set channel explicitly in the delivery config.",
+      "source": "andy",
+      "project": "general"
+    },
+    {
+      "date": "2026-03-05",
+      "category": "trading",
+      "title": "Position sizing must match asset prices",
+      "description": "max_position_usd of $100-$3000 is meaningless for BTC where ATR-based sizing creates ~$8K+ notional positions. Orchestrator signals were silently risk-blocked for weeks. Always validate risk limits against actual position sizes at current asset prices.",
+      "tags": [
+        "crypto",
+        "risk-management",
+        "position-sizing",
+        "debugging"
+      ],
+      "type": "learning",
+      "id": "1c956fbb-53a5-40c6-b828-1539ec3aae40",
+      "text": "Position sizing must match asset prices \u2014 max_position_usd of $100-$3000 is meaningless for BTC where ATR-based sizing creates ~$8K+ notional positions. Orchestrator signals were silently risk-blocked for weeks. Always validate risk limits against actual position sizes at current asset prices.",
+      "source": "andy",
+      "project": "general"
+    },
+    {
+      "date": "2026-03-05",
+      "category": "trading",
+      "title": "Backtest bugs can hide strategy performance",
+      "description": "Backtest engine never forwarded allow_short to PaperTradingEngine \u2014 short signals silently blocked. Combined with undersized max_position, orchestrator showed 0 trades in backtests, making it look broken when it was actually generating good signals.",
+      "tags": [
+        "crypto",
+        "backtesting",
+        "debugging",
+        "silent-failures"
+      ],
+      "type": "learning",
+      "id": "5a0f5a16-11ed-431a-beda-60b472a287cf",
+      "text": "Backtest bugs can hide strategy performance \u2014 Backtest engine never forwarded allow_short to PaperTradingEngine \u2014 short signals silently blocked. Combined with undersized max_position, orchestrator showed 0 trades in backtests, making it look broken when it was actually generating good signals.",
+      "source": "andy",
+      "project": "general"
+    },
+    {
+      "date": "2026-03-05",
+      "category": "trading",
+      "title": "Tight risk per trade + proper sizing = best risk-adjusted returns",
+      "description": "Backtesting 12 months of BTC/ETH data: 0.5% risk per trade with proper position sizing (+55%, 0.98 Sharpe on BTC) beat aggressive configs. Tighter stops (1.0 ATR vs 1.5) and higher ADX thresholds (25 vs 20) improved quality of trades.",
+      "tags": [
+        "crypto",
+        "backtesting",
+        "risk-management",
+        "strategy"
+      ],
+      "type": "learning",
+      "id": "e34d65e3-1e57-425a-b25d-581d82e31122",
+      "text": "Tight risk per trade + proper sizing = best risk-adjusted returns \u2014 Backtesting 12 months of BTC/ETH data: 0.5% risk per trade with proper position sizing (+55%, 0.98 Sharpe on BTC) beat aggressive configs. Tighter stops (1.0 ATR vs 1.5) and higher ADX thresholds (25 vs 20) improved quality of trades.",
+      "source": "andy",
+      "project": "general"
+    },
+    {
+      "date": "2026-03-05",
+      "category": "performance",
+      "title": "Cap indicator window for backtest speedup",
+      "description": "Backtest engine was passing full candle history to indicators on every tick. Capping to last 500 candles gave 23x speedup (10min to 26sec for 12-month orchestrator run) with identical results.",
+      "tags": [
+        "performance",
+        "optimization",
+        "backtesting",
+        "python"
+      ],
+      "type": "error",
+      "id": "1e478917-b544-4e4d-8707-0accef44420e",
+      "text": "Cap indicator window for backtest speedup \u2014 Backtest engine was passing full candle history to indicators on every tick. Capping to last 500 candles gave 23x speedup (10min to 26sec for 12-month orchestrator run) with identical results.",
+      "source": "andy",
+      "project": "general"
     }
   ]
 }

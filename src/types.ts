@@ -8,6 +8,10 @@ export interface Agent {
   role: string;
   sessionAge?: string;
   avatar?: string;
+  task?: string | null;
+  project?: string | null;
+  startedAt?: string | null;
+  elapsed?: string | null;
 }
 
 export interface ChatMessage {
