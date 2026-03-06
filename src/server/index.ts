@@ -51,6 +51,109 @@ function extractGatewayText(payload: Record<string, unknown>): string | null {
   return typeof content === 'string' ? content : null;
 }
 
+function truncateStdout(stdout: string, maxLength = 500): string {
+  if (stdout.length <= maxLength) return stdout;
+  return `${stdout.slice(0, maxLength)}...`;
+}
+
+function logAgentParseFallback(stdout: string, reason: string) {
+  const trimmed = stdout.trim();
+  if (!trimmed) return;
+  console.error(`AO chat response parse fallback (${reason}). Raw stdout (truncated):`, truncateStdout(trimmed));
+}
+
+function findFallbackString(value: unknown): string | null {
+  const stack: unknown[] = [value];
+  const seen = new Set<unknown>();
+  const strings: string[] = [];
+
+  while (stack.length > 0) {
+    const current = stack.pop();
+    if (typeof current === 'string') {
+      const trimmed = current.trim();
+      if (trimmed) strings.push(trimmed);
+      continue;
+    }
+    if (!current || typeof current !== 'object') continue;
+    if (seen.has(current)) continue;
+    seen.add(current);
+
+    if (Array.isArray(current)) {
+      for (const item of current) stack.push(item);
+    } else {
+      for (const item of Object.values(current as Record<string, unknown>)) {
+        stack.push(item);
+      }
+    }
+  }
+
+  if (strings.length === 0) return null;
+  const longStrings = strings.filter((str) => str.length >= 16);
+  const candidates = longStrings.length > 0 ? longStrings : strings;
+  return candidates.sort((a, b) => b.length - a.length)[0] ?? null;
+}
+
+function parseAgentResponse(stdout: string): { content: string; silent: boolean } {
+  let content = '(no response)';
+  let silent = false;
+
+  const raw = stdout ?? '';
+  let parsed: unknown = null;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    parsed = null;
+  }
+
+  if (parsed && typeof parsed === 'object') {
+    const record = parsed as Record<string, unknown>;
+    const result = record.result as Record<string, unknown> | undefined;
+    const payloads = result?.payloads as Array<Record<string, unknown>> | undefined;
+    if (Array.isArray(payloads) && payloads.length === 0) {
+      content = '';
+      silent = true;
+    } else if (payloads?.[0]?.text && typeof payloads[0].text === 'string') {
+      content = payloads[0].text;
+    } else if (typeof record.text === 'string') {
+      content = record.text;
+    } else if (typeof record.content === 'string') {
+      content = record.content;
+    } else if (typeof result?.text === 'string') {
+      content = result.text as string;
+    } else {
+      logAgentParseFallback(raw, 'no matching structured fields');
+      const fallback = findFallbackString(parsed);
+      if (fallback) {
+        content = fallback;
+      } else if (raw.trim()) {
+        content = raw.trim();
+      }
+    }
+  } else if (parsed !== null && typeof parsed === 'string') {
+    content = parsed;
+  } else if (parsed !== null) {
+    logAgentParseFallback(raw, 'json without string payload');
+    const fallback = findFallbackString(parsed);
+    if (fallback) {
+      content = fallback;
+    } else if (raw.trim()) {
+      content = raw.trim();
+    }
+  } else if (raw.trim()) {
+    logAgentParseFallback(raw, 'invalid json');
+    content = raw.trim();
+  }
+
+  if (content === 'NO_REPLY') {
+    content = '';
+    silent = true;
+  } else if (content.trim() === '') {
+    silent = true;
+  }
+
+  return { content, silent };
+}
+
 function extractUsage(payload: Record<string, unknown>): Record<string, number> | undefined {
   if (!payload.usage || typeof payload.usage !== 'object') return undefined;
   return payload.usage as Record<string, number>;
@@ -293,37 +396,7 @@ app.post('/api/chat', async (req, res) => {
       { timeout: 60000 },
     );
 
-    let content = '(no response)';
-    let silent = false;
-    try {
-      const parsed = JSON.parse(stdout) as Record<string, unknown>;
-      // Try result.payloads[0].text
-      const result = parsed.result as Record<string, unknown> | undefined;
-      const payloads = result?.payloads as Array<Record<string, unknown>> | undefined;
-      if (Array.isArray(payloads) && payloads.length === 0) {
-        content = '';
-        silent = true;
-      } else if (payloads?.[0]?.text && typeof payloads[0].text === 'string') {
-        content = payloads[0].text;
-      } else if (typeof parsed.text === 'string') {
-        content = parsed.text;
-      } else if (typeof parsed.content === 'string') {
-        content = parsed.content;
-      } else if (typeof result?.text === 'string') {
-        content = result.text as string;
-      } else {
-        content = '(no response)';
-      }
-    } catch {
-      content = '(no response)';
-    }
-
-    if (content === 'NO_REPLY') {
-      content = '';
-      silent = true;
-    } else if (content.trim() === '') {
-      silent = true;
-    }
+    const { content, silent } = parseAgentResponse(stdout);
 
     res.json({ content, silent, usage: null });
   } catch (err) {
@@ -533,36 +606,7 @@ wss.on('connection', (ws) => {
             return;
           }
 
-          let content = '(no response)';
-          let silent = false;
-          try {
-            const parsed = JSON.parse(stdout) as Record<string, unknown>;
-            const result = parsed.result as Record<string, unknown> | undefined;
-            const payloads = result?.payloads as Array<Record<string, unknown>> | undefined;
-            if (Array.isArray(payloads) && payloads.length === 0) {
-              content = '';
-              silent = true;
-            } else if (payloads?.[0]?.text && typeof payloads[0].text === 'string') {
-              content = payloads[0].text;
-            } else if (typeof parsed.text === 'string') {
-              content = parsed.text;
-            } else if (typeof parsed.content === 'string') {
-              content = parsed.content;
-            } else if (typeof result?.text === 'string') {
-              content = result.text as string;
-            } else {
-              content = '(no response)';
-            }
-          } catch {
-            content = '(no response)';
-          }
-
-          if (content === 'NO_REPLY') {
-            content = '';
-            silent = true;
-          } else if (content.trim() === '') {
-            silent = true;
-          }
+          const { content, silent } = parseAgentResponse(stdout);
 
           if (!silent) {
             sendWs(ws, { type: 'message', content });
