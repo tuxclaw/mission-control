@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { Bot, Plus, Send, Trash2, User } from 'lucide-react';
+import { Bot, Plus, Send, Smile, Trash2, User } from 'lucide-react';
 
 interface ChatMsg {
   id: string;
@@ -14,6 +14,34 @@ type ConnectionState = 'connected' | 'reconnecting' | 'disconnected';
 const WS_URL = 'ws://localhost:3851/ws/chat';
 const MAX_RECONNECT_ATTEMPTS = 20;
 
+const EMOJI_CATEGORIES = [
+  {
+    key: 'smileys',
+    label: 'Smileys',
+    emojis: ['😀', '😂', '🤣', '😊', '😍', '🥰', '😘', '😜', '🤔', '🤗', '😴', '😎', '🥳', '🤯', '😱', '😭', '😤', '🙄', '😈'],
+  },
+  {
+    key: 'gestures',
+    label: 'Gestures',
+    emojis: ['👍', '👎', '👋', '🤝', '🙏', '💪', '👏', '🤞', '✌️', '🤟', '👊', '🫡', '🫶'],
+  },
+  {
+    key: 'hearts',
+    label: 'Hearts',
+    emojis: ['❤️', '🧡', '💛', '💚', '💙', '💜', '🖤', '🤍', '💔', '❣️', '💕', '💗', '💖'],
+  },
+  {
+    key: 'objects',
+    label: 'Objects',
+    emojis: ['🔥', '⭐', '💡', '🎉', '🎊', '🚀', '💻', '🎯', '📌', '✅', '❌', '⚡', '🏆', '💎', '🔑', '🎵'],
+  },
+  {
+    key: 'nature',
+    label: 'Nature',
+    emojis: ['🌈', '☀️', '🌙', '⛅', '🌊', '🌸', '🌺', '🍀', '🌿', '🌵', '🌴', '🌻'],
+  },
+] as const;
+
 function createId() {
   return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
@@ -26,6 +54,8 @@ export function ChatView() {
   const [sending, setSending] = useState(false);
   const [streamingId, setStreamingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [emojiPickerOpen, setEmojiPickerOpen] = useState(false);
+  const [emojiCategory, setEmojiCategory] = useState<(typeof EMOJI_CATEGORIES)[number]['key']>('smileys');
 
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimerRef = useRef<number | null>(null);
@@ -33,6 +63,9 @@ export function ChatView() {
   const streamingIdRef = useRef<string | null>(null);
   const shouldReconnectRef = useRef(true);
   const endRef = useRef<HTMLDivElement | null>(null);
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const emojiPickerRef = useRef<HTMLDivElement | null>(null);
+  const emojiButtonRef = useRef<HTMLButtonElement | null>(null);
 
   const setStreaming = useCallback((id: string | null) => {
     streamingIdRef.current = id;
@@ -243,6 +276,46 @@ export function ChatView() {
     endRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, sending, streamingId]);
 
+  useEffect(() => {
+    if (!emojiPickerOpen) return;
+
+    const handleOutsideClick = (event: MouseEvent | TouchEvent) => {
+      const target = event.target as Node | null;
+      if (!target) return;
+      if (emojiPickerRef.current?.contains(target)) return;
+      if (emojiButtonRef.current?.contains(target)) return;
+      setEmojiPickerOpen(false);
+    };
+
+    document.addEventListener('mousedown', handleOutsideClick);
+    document.addEventListener('touchstart', handleOutsideClick);
+    return () => {
+      document.removeEventListener('mousedown', handleOutsideClick);
+      document.removeEventListener('touchstart', handleOutsideClick);
+    };
+  }, [emojiPickerOpen]);
+
+  const insertEmoji = (emoji: string) => {
+    const inputEl = inputRef.current;
+    if (!inputEl) {
+      setInput(prev => `${prev}${emoji}`);
+      setEmojiPickerOpen(false);
+      return;
+    }
+
+    const start = inputEl.selectionStart ?? input.length;
+    const end = inputEl.selectionEnd ?? input.length;
+    const nextValue = `${input.slice(0, start)}${emoji}${input.slice(end)}`;
+    setInput(nextValue);
+    setEmojiPickerOpen(false);
+
+    requestAnimationFrame(() => {
+      inputEl.focus();
+      const nextCursor = start + emoji.length;
+      inputEl.setSelectionRange(nextCursor, nextCursor);
+    });
+  };
+
   const handleSend = () => {
     const text = input.trim();
     if (!text) return;
@@ -279,6 +352,7 @@ export function ChatView() {
     : connectionState === 'reconnecting'
       ? 'chat-connection-dot--reconnecting'
       : 'chat-connection-dot--disconnected';
+  const activeEmojiSet = EMOJI_CATEGORIES.find(category => category.key === emojiCategory) ?? EMOJI_CATEGORIES[0];
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0, flex: 1 }}>
@@ -445,9 +519,42 @@ export function ChatView() {
       </div>
 
       <div className="chat-input-wrap" style={{ padding: 12, borderTop: '1px solid var(--border)' }}>
+        {emojiPickerOpen && (
+          <div className="emoji-picker" ref={emojiPickerRef} role="dialog" aria-label="Emoji picker">
+            <div className="emoji-picker__tabs" role="tablist" aria-label="Emoji categories">
+              {EMOJI_CATEGORIES.map(category => (
+                <button
+                  key={category.key}
+                  type="button"
+                  role="tab"
+                  aria-selected={emojiCategory === category.key}
+                  className={`emoji-picker__tab ${emojiCategory === category.key ? 'emoji-picker__tab--active' : ''}`}
+                  onClick={() => setEmojiCategory(category.key)}
+                >
+                  {category.label}
+                </button>
+              ))}
+            </div>
+            <div className="emoji-picker__grid" role="grid">
+              {activeEmojiSet.emojis.map(emoji => (
+                <button
+                  key={`${activeEmojiSet.key}-${emoji}`}
+                  type="button"
+                  className="emoji-picker__emoji"
+                  onClick={() => insertEmoji(emoji)}
+                  aria-label={`Insert emoji ${emoji}`}
+                  role="gridcell"
+                >
+                  {emoji}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
         <div className="chat-input-box" style={{ display: 'flex', gap: 8, alignItems: 'center', borderRadius: 12, padding: '8px 12px' }}>
           <input
             className="chat-input"
+            ref={inputRef}
             value={input}
             onChange={e => setInput(e.target.value)}
             onKeyDown={e => {
@@ -457,10 +564,21 @@ export function ChatView() {
               }
             }}
             placeholder={connected ? 'Message Andy...' : 'Connecting...'}
+            spellCheck={true}
+            autoComplete="off"
             aria-busy={busy}
             aria-label="Message input"
             style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', fontSize: 16, padding: '4px 0' }}
           />
+          <button
+            ref={emojiButtonRef}
+            className={`chat-send-btn chat-emoji-btn ${emojiPickerOpen ? 'chat-emoji-btn--active' : ''}`}
+            type="button"
+            onClick={() => setEmojiPickerOpen(open => !open)}
+            aria-label="Toggle emoji picker"
+          >
+            <Smile size={18} />
+          </button>
           <button
             className={`chat-send-btn ${canSend ? 'chat-send-btn--active' : 'chat-send-btn--disabled'}`}
             type="button"
