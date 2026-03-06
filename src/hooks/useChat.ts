@@ -60,15 +60,19 @@ export function useChat(): UseChatResult {
         }
         return res.json();
       })
-      .then((data: { content: string; usage?: Record<string, number> }) => {
-        const agentMsg: ChatMessage = {
-          id: crypto.randomUUID(),
-          role: 'agent',
-          content: data.content || '(empty response)',
-          timestamp: new Date(),
-          agentId: 'andy-main',
-        };
-        setMessages(prev => [...prev, agentMsg]);
+      .then((data: { content?: string; silent?: boolean; usage?: Record<string, number> }) => {
+        const content = typeof data.content === 'string' ? data.content : '';
+        const isSilent = data.silent === true || content.trim() === '';
+        if (!isSilent) {
+          const agentMsg: ChatMessage = {
+            id: crypto.randomUUID(),
+            role: 'agent',
+            content,
+            timestamp: new Date(),
+            agentId: 'andy-main',
+          };
+          setMessages(prev => [...prev, agentMsg]);
+        }
         if (data.usage) {
           setSessionInfo(prev => ({
             ...prev,

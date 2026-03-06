@@ -294,12 +294,16 @@ app.post('/api/chat', async (req, res) => {
     );
 
     let content = '(no response)';
+    let silent = false;
     try {
       const parsed = JSON.parse(stdout) as Record<string, unknown>;
       // Try result.payloads[0].text
       const result = parsed.result as Record<string, unknown> | undefined;
       const payloads = result?.payloads as Array<Record<string, unknown>> | undefined;
-      if (payloads?.[0]?.text && typeof payloads[0].text === 'string') {
+      if (Array.isArray(payloads) && payloads.length === 0) {
+        content = '';
+        silent = true;
+      } else if (payloads?.[0]?.text && typeof payloads[0].text === 'string') {
         content = payloads[0].text;
       } else if (typeof parsed.text === 'string') {
         content = parsed.text;
@@ -308,13 +312,20 @@ app.post('/api/chat', async (req, res) => {
       } else if (typeof result?.text === 'string') {
         content = result.text as string;
       } else {
-        content = stdout.trim() || '(no response)';
+        content = '(no response)';
       }
     } catch {
-      content = stdout.trim() || '(no response)';
+      content = '(no response)';
     }
 
-    res.json({ content, usage: null });
+    if (content === 'NO_REPLY') {
+      content = '';
+      silent = true;
+    } else if (content.trim() === '') {
+      silent = true;
+    }
+
+    res.json({ content, silent, usage: null });
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'Chat failed';
     res.status(500).json({ error: msg });
