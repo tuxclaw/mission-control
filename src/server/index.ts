@@ -494,14 +494,17 @@ wss.on('connection', (ws) => {
     try {
       const { spawn } = await import('child_process');
       const child = spawn('openclaw', [
-        'agent', '--session-id', chatSessionId, '--json', '-m', message,
+        'agent', '--session-id', chatSessionId, '-m', message,
       ], { timeout: 120000 });
 
       let stdout = '';
       let stderr = '';
 
       child.stdout.on('data', (chunk: Buffer) => {
-        stdout += chunk.toString();
+        const text = chunk.toString();
+        if (!text) return;
+        stdout += text;
+        sendWs(ws, { type: 'token', token: text });
       });
 
       child.stderr.on('data', (chunk: Buffer) => {
@@ -512,8 +515,18 @@ wss.on('connection', (ws) => {
       ws.on('close', onWsClose);
 
       await new Promise<void>((resolve) => {
-        child.on('close', (code) => {
+        let settled = false;
+        const handleExit = (code: number | null, error?: Error) => {
+          if (settled) return;
+          settled = true;
           ws.removeListener('close', onWsClose);
+
+          if (error) {
+            sendWs(ws, { type: 'error', message: error.message });
+            sendWs(ws, { type: 'done' });
+            resolve();
+            return;
+          }
 
           if (code !== 0) {
             sendWs(ws, { type: 'error', message: stderr.trim() || `Agent exited with code ${code}` });
@@ -522,29 +535,18 @@ wss.on('connection', (ws) => {
             return;
           }
 
-          let content = '(no response)';
-          try {
-            const parsed = JSON.parse(stdout) as Record<string, unknown>;
-            const result = parsed.result as Record<string, unknown> | undefined;
-            const payloads = result?.payloads as Array<Record<string, unknown>> | undefined;
-            if (payloads?.[0]?.text && typeof payloads[0].text === 'string') {
-              content = payloads[0].text;
-            } else if (typeof parsed.text === 'string') {
-              content = parsed.text;
-            } else if (typeof parsed.content === 'string') {
-              content = parsed.content;
-            } else if (typeof result?.text === 'string') {
-              content = result.text as string;
-            } else {
-              content = stdout.trim() || '(no response)';
-            }
-          } catch {
-            content = stdout.trim() || '(no response)';
-          }
-
+          const content = stdout.trim() || '(no response)';
           sendWs(ws, { type: 'message', content });
           sendWs(ws, { type: 'done' });
           resolve();
+        };
+
+        child.on('error', (err) => {
+          handleExit(null, err instanceof Error ? err : new Error('Agent process error'));
+        });
+
+        child.on('close', (code) => {
+          handleExit(code);
         });
       });
     } catch (err) {
@@ -581,7 +583,7 @@ const SQUAD_ROSTER = [
   { id: 'woody', name: 'Woody 🤠', defaultModel: 'codex', role: 'Coding Agent', engine: 'codex' },
   { id: 'sarge', name: 'Sarge 🎖️', defaultModel: 'opus', role: 'Code Review', engine: 'subagent' },
   { id: 'trixie', name: 'Trixie 🎨', defaultModel: 'opus', role: 'UI/Design', engine: 'subagent' },
-  { id: 'jessie', name: 'Jessie 🔍', defaultModel: 'sonnet', role: 'Research', engine: 'subagent' },
+  { id: 'jessie', name: 'Jessie 🔍', defaultModel: 'opus', role: 'Research', engine: 'subagent' },
   { id: 'slink', name: 'Slink 🐕', defaultModel: 'sonnet', role: 'Trading Monitor', engine: 'cron' },
 ];
 
