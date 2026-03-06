@@ -304,6 +304,79 @@ app.post('/api/chat', async (req, res) => {
   }
 });
 
+app.get('/api/chat/history', (req, res) => {
+  if (!systemDb) {
+    res.json({ messages: [] });
+    return;
+  }
+
+  const limitRaw = typeof req.query.limit === 'string' ? Number.parseInt(req.query.limit, 10) : 50;
+  const limit = Number.isFinite(limitRaw) ? Math.min(200, Math.max(1, limitRaw)) : 50;
+  const beforeRaw = typeof req.query.before === 'string' ? Number.parseInt(req.query.before, 10) : null;
+  const before = Number.isFinite(beforeRaw) ? beforeRaw : null;
+
+  let sql = 'SELECT msg_id, role, content, timestamp FROM chat_messages';
+  const params: Array<string | number> = [];
+  if (before !== null) {
+    sql += ' WHERE timestamp < ?';
+    params.push(before);
+  }
+  sql += ' ORDER BY timestamp ASC LIMIT ?';
+  params.push(limit);
+
+  const result = systemDb.exec(sql, params);
+  const messages = result.length > 0
+    ? result[0].values.map((row) => ({
+      msg_id: row[0] as string,
+      role: row[1] as string,
+      content: row[2] as string,
+      timestamp: row[3] as number,
+    }))
+    : [];
+
+  res.json({ messages });
+});
+
+app.post('/api/chat/messages', (req, res) => {
+  if (!systemDb) {
+    res.status(500).json({ error: 'System DB unavailable' });
+    return;
+  }
+
+  const { msg_id, role, content, timestamp } = req.body as {
+    msg_id?: string;
+    role?: string;
+    content?: string;
+    timestamp?: number;
+  };
+
+  if (!msg_id || typeof msg_id !== 'string'
+    || !role || typeof role !== 'string'
+    || !content || typeof content !== 'string'
+    || typeof timestamp !== 'number') {
+    res.status(400).json({ error: 'Invalid payload' });
+    return;
+  }
+
+  systemDb.run(
+    'INSERT OR IGNORE INTO chat_messages (msg_id, role, content, timestamp) VALUES (?, ?, ?, ?)',
+    [msg_id, role, content, timestamp],
+  );
+  saveSystemDb();
+  res.json({ ok: true });
+});
+
+app.delete('/api/chat/history', (_req, res) => {
+  if (!systemDb) {
+    res.json({ ok: true });
+    return;
+  }
+
+  systemDb.run('DELETE FROM chat_messages');
+  saveSystemDb();
+  res.json({ ok: true });
+});
+
 // ---- Model Switcher ----
 const ALLOWED_MODELS = new Set([
   'anthropic/claude-opus-4-6',
@@ -1203,6 +1276,17 @@ async function initSystemDb(path: string) {
     )
   `);
 
+  systemDb.run(`
+    CREATE TABLE IF NOT EXISTS chat_messages (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      msg_id TEXT NOT NULL UNIQUE,
+      role TEXT NOT NULL,
+      content TEXT NOT NULL,
+      timestamp INTEGER NOT NULL
+    )
+  `);
+
+  systemDb.run('CREATE INDEX IF NOT EXISTS idx_chat_messages_ts ON chat_messages(timestamp)');
   systemDb.run('CREATE INDEX IF NOT EXISTS idx_gpu_metrics_ts ON gpu_metrics(timestamp)');
   systemDb.run('CREATE INDEX IF NOT EXISTS idx_metrics_ts ON metrics(timestamp)');
 

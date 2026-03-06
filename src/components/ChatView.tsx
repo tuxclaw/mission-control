@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { Bot, Send, User } from 'lucide-react';
+import { Bot, Send, Trash2, User } from 'lucide-react';
 
 interface ChatMsg {
   id: string;
@@ -39,6 +39,19 @@ export function ChatView() {
     setStreamingId(id);
   }, []);
 
+  const persistMessage = useCallback((msg: ChatMsg) => {
+    fetch('/api/chat/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        msg_id: msg.id,
+        role: msg.role,
+        content: msg.content,
+        timestamp: msg.timestamp.getTime(),
+      }),
+    }).catch(() => {});
+  }, []);
+
   // -- Ref-wrapped handlers to avoid stale closures in WS listeners --
   const handleTokenRef = useRef((_token: string) => {});
   handleTokenRef.current = (token: string) => {
@@ -60,17 +73,29 @@ export function ChatView() {
   const handleMessageRef = useRef((_content: string) => {});
   handleMessageRef.current = (content: string) => {
     setSending(false);
+    let persistPayload: ChatMsg | null = null;
+    const now = new Date();
     setMessages(prev => {
       const currentId = streamingIdRef.current;
       if (currentId) {
+        const existing = prev.find(msg => msg.id === currentId);
+        persistPayload = {
+          id: currentId,
+          role: 'agent',
+          content,
+          timestamp: existing?.timestamp ?? now,
+        };
         return prev.map(msg => msg.id === currentId
           ? { ...msg, content, streaming: false }
           : msg
         );
       }
-      return [...prev, { id: createId(), role: 'agent' as const, content, timestamp: new Date() }];
+      const newMsg: ChatMsg = { id: createId(), role: 'agent', content, timestamp: now };
+      persistPayload = newMsg;
+      return [...prev, newMsg];
     });
     setStreaming(null);
+    if (persistPayload) persistMessage(persistPayload);
   };
 
   const handleDoneRef = useRef(() => {});
@@ -78,11 +103,15 @@ export function ChatView() {
     setSending(false);
     const currentId = streamingIdRef.current;
     if (!currentId) return;
-    setMessages(prev => prev.map(msg => msg.id === currentId
-      ? { ...msg, streaming: false }
-      : msg
-    ));
+    let persistPayload: ChatMsg | null = null;
+    setMessages(prev => prev.map(msg => {
+      if (msg.id !== currentId) return msg;
+      const updated = { ...msg, streaming: false };
+      persistPayload = updated;
+      return updated;
+    }));
     setStreaming(null);
+    if (persistPayload) persistMessage(persistPayload);
   };
 
   const handleErrorRef = useRef((_message: string) => {});
@@ -192,6 +221,25 @@ export function ChatView() {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
+    let active = true;
+    fetch('/api/chat/history?limit=100')
+      .then(res => res.json())
+      .then((data: { messages?: Array<{ msg_id: string; role: 'user' | 'agent'; content: string; timestamp: number }> }) => {
+        if (!active || !data?.messages) return;
+        setMessages(data.messages.map(msg => ({
+          id: msg.msg_id,
+          role: msg.role,
+          content: msg.content,
+          timestamp: new Date(msg.timestamp),
+        })));
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, sending, streamingId]);
 
@@ -215,6 +263,7 @@ export function ChatView() {
       timestamp: new Date(),
     };
     setMessages(prev => [...prev, userMsg]);
+    persistMessage(userMsg);
     wsRef.current.send(JSON.stringify({ message: text }));
   };
 
@@ -248,6 +297,37 @@ export function ChatView() {
           <span className={`chat-connection-dot ${connectionDotClass}`} aria-label={connectionLabel} />
           <span className="chat-session-bar__model">{connectionLabel}</span>
           <span className="chat-session-bar__tokens">WebSocket</span>
+          <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center' }}>
+            <button
+              type="button"
+              onClick={() => {
+                if (!window.confirm('Clear chat history?')) return;
+                fetch('/api/chat/history', { method: 'DELETE' })
+                  .then(() => {
+                    setMessages([]);
+                    setStreaming(null);
+                    streamingIdRef.current = null;
+                  })
+                  .catch(() => {});
+              }}
+              aria-label="Clear chat history"
+              title="Clear chat history"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                border: '1px solid var(--border)',
+                background: 'transparent',
+                color: 'inherit',
+                padding: '4px 8px',
+                borderRadius: 8,
+                fontSize: 12,
+              }}
+            >
+              <Trash2 size={14} />
+              Clear
+            </button>
+          </div>
         </div>
 
         {error && (
