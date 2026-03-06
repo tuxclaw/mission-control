@@ -1,3 +1,4 @@
+@import "highlight.js/styles/github-dark.css";
 @import "tailwindcss";
 
 :root {
@@ -525,6 +526,8 @@ body {
 
 .chat-timestamp {
   color: var(--text-muted);
+  font-size: 10px;
+  margin-top: 2px;
 }
 
 .chat-input-wrap {
@@ -545,6 +548,194 @@ body {
 
 .chat-input {
   color: var(--text-primary);
+}
+
+.chat-msg {
+  position: relative;
+}
+
+.chat-msg__copy {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  border: none;
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  padding: 4px;
+  border-radius: 6px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--transition-fast), transform var(--transition-fast);
+  transform: translateY(-2px);
+}
+
+.chat-msg__copy:hover {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
+
+.chat-msg:hover .chat-msg__copy {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.chat-msg__copy-tooltip {
+  position: absolute;
+  top: -22px;
+  right: 0;
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  padding: 2px 6px;
+  border-radius: 6px;
+  font-size: 10px;
+  opacity: 0;
+  transform: translateY(4px);
+  transition: opacity var(--transition-fast), transform var(--transition-fast);
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.chat-msg__copy--active .chat-msg__copy-tooltip {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.chat-markdown {
+  color: var(--text-primary);
+  line-height: 1.55;
+}
+
+.chat-markdown p,
+.chat-markdown ul,
+.chat-markdown ol,
+.chat-markdown li,
+.chat-markdown h1,
+.chat-markdown h2,
+.chat-markdown h3,
+.chat-markdown h4,
+.chat-markdown h5,
+.chat-markdown h6,
+.chat-markdown blockquote,
+.chat-markdown table,
+.chat-markdown a,
+.chat-markdown strong,
+.chat-markdown em,
+.chat-markdown code {
+  margin: 0 0 8px 0;
+}
+
+.chat-markdown ul,
+.chat-markdown ol {
+  padding-left: 18px;
+}
+
+.chat-markdown li {
+  margin-bottom: 6px;
+}
+
+.chat-markdown h1,
+.chat-markdown h2,
+.chat-markdown h3,
+.chat-markdown h4,
+.chat-markdown h5,
+.chat-markdown h6 {
+  color: var(--text-primary);
+  margin-top: 12px;
+  margin-bottom: 6px;
+}
+
+.chat-markdown code {
+  background: var(--bg-secondary);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 0.9em;
+}
+
+.chat-markdown pre {
+  background: var(--bg-secondary);
+  border-radius: 8px;
+  overflow-x: auto;
+  padding: 12px;
+  margin: 0;
+}
+
+.chat-markdown a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.chat-markdown a:hover {
+  text-decoration: underline;
+}
+
+.chat-markdown blockquote {
+  border-left: 3px solid var(--accent-dim);
+  padding-left: 12px;
+  color: var(--text-muted);
+}
+
+.chat-markdown table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 13px;
+}
+
+.chat-markdown th,
+.chat-markdown td {
+  border: 1px solid var(--border);
+  padding: 6px 8px;
+  text-align: left;
+}
+
+.chat-markdown img {
+  max-width: 100%;
+  border-radius: 8px;
+}
+
+.chat-code-block {
+  position: relative;
+  margin: 8px 0;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  background: var(--bg-secondary);
+}
+
+.chat-code-block__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px;
+  background: #0c0f16;
+  border-bottom: 1px solid var(--border);
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.chat-code-block__copy {
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-secondary);
+  border-radius: 6px;
+  padding: 2px 8px;
+  cursor: pointer;
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+
+.chat-code-block__copy:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.chat-code-block__lang {
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.chat-code-block pre {
+  margin: 0;
 }
 
 .chat-send-btn {
