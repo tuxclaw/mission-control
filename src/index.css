@@ -529,6 +529,7 @@ body {
 
 .chat-input-wrap {
   border-color: var(--border);
+  position: relative;
 }
 
 .chat-input-box {
@@ -588,6 +589,83 @@ body {
 
 .chat-send-btn--disabled:active {
   transform: none;
+}
+
+.chat-emoji-btn {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+}
+
+.chat-emoji-btn:hover {
+  filter: brightness(1.08);
+  transform: scale(1.03);
+}
+
+.chat-emoji-btn--active {
+  background: var(--accent);
+  color: #000;
+  box-shadow: var(--glow-accent);
+}
+
+.emoji-picker {
+  position: absolute;
+  right: 12px;
+  bottom: calc(100% + 12px);
+  width: min(420px, calc(100% - 24px));
+  padding: 12px;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: var(--bg-surface);
+  box-shadow: 0 16px 32px rgba(0, 0, 0, 0.35);
+  z-index: 10;
+}
+
+.emoji-picker__tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.emoji-picker__tab {
+  border: 1px solid var(--border);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.emoji-picker__tab--active {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #000;
+  box-shadow: var(--glow-accent);
+}
+
+.emoji-picker__grid {
+  display: grid;
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.emoji-picker__emoji {
+  border: none;
+  background: transparent;
+  font-size: 20px;
+  line-height: 1;
+  padding: 6px;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: transform 0.12s ease, background 0.12s ease;
+}
+
+.emoji-picker__emoji:hover {
+  background: var(--bg-secondary);
+  transform: scale(1.12);
 }
 
 /* Typing dots animation */
