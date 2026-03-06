@@ -400,34 +400,69 @@ wss.on('connection', (ws) => {
     }
 
     inFlight = true;
-    abortController = new AbortController();
 
     try {
-      const upstream = await fetch(`${GATEWAY_URL}/api/sessions/main/message`, {
-        method: 'POST',
-        headers: gatewayHeaders({ 'Content-Type': 'application/json' }),
-        body: JSON.stringify({ message, stream: true }),
-        signal: abortController.signal,
+      const { spawn } = await import('child_process');
+      const child = spawn('openclaw', [
+        'agent', '--session-id', 'andys-overview-chat', '--json', '-m', message,
+      ], { timeout: 120000 });
+
+      let stdout = '';
+      let stderr = '';
+
+      child.stdout.on('data', (chunk: Buffer) => {
+        stdout += chunk.toString();
       });
 
-      if (!upstream.ok) {
-        const body = await upstream.text().catch(() => '');
-        sendWs(ws, {
-          type: 'error',
-          message: `Gateway error ${upstream.status}${body ? `: ${body}` : ''}`,
-        });
-        sendWs(ws, { type: 'done' });
-        return;
-      }
+      child.stderr.on('data', (chunk: Buffer) => {
+        stderr += chunk.toString();
+      });
 
-      await handleGatewayStream(ws, upstream);
+      const onWsClose = () => { child.kill(); };
+      ws.on('close', onWsClose);
+
+      await new Promise<void>((resolve) => {
+        child.on('close', (code) => {
+          ws.removeListener('close', onWsClose);
+
+          if (code !== 0) {
+            sendWs(ws, { type: 'error', message: stderr.trim() || `Agent exited with code ${code}` });
+            sendWs(ws, { type: 'done' });
+            resolve();
+            return;
+          }
+
+          let content = '(no response)';
+          try {
+            const parsed = JSON.parse(stdout) as Record<string, unknown>;
+            const result = parsed.result as Record<string, unknown> | undefined;
+            const payloads = result?.payloads as Array<Record<string, unknown>> | undefined;
+            if (payloads?.[0]?.text && typeof payloads[0].text === 'string') {
+              content = payloads[0].text;
+            } else if (typeof parsed.text === 'string') {
+              content = parsed.text;
+            } else if (typeof parsed.content === 'string') {
+              content = parsed.content;
+            } else if (typeof result?.text === 'string') {
+              content = result.text as string;
+            } else {
+              content = stdout.trim() || '(no response)';
+            }
+          } catch {
+            content = stdout.trim() || '(no response)';
+          }
+
+          sendWs(ws, { type: 'message', content });
+          sendWs(ws, { type: 'done' });
+          resolve();
+        });
+      });
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'WebSocket proxy error';
       sendWs(ws, { type: 'error', message: msg });
       sendWs(ws, { type: 'done' });
     } finally {
       inFlight = false;
-      abortController = null;
     }
   });
 });
@@ -455,7 +490,7 @@ const SQUAD_ROSTER = [
   { id: 'buzz', name: 'Buzz 🚀', defaultModel: 'codex', role: 'Coding Agent', engine: 'codex' },
   { id: 'woody', name: 'Woody 🤠', defaultModel: 'codex', role: 'Coding Agent', engine: 'codex' },
   { id: 'sarge', name: 'Sarge 🎖️', defaultModel: 'opus', role: 'Code Review', engine: 'subagent' },
-  { id: 'trixie', name: 'Trixie 🎨', defaultModel: 'claude', role: 'UI/Design', engine: 'subagent' },
+  { id: 'trixie', name: 'Trixie 🎨', defaultModel: 'opus', role: 'UI/Design', engine: 'subagent' },
   { id: 'jessie', name: 'Jessie 🔍', defaultModel: 'sonnet', role: 'Research', engine: 'subagent' },
   { id: 'slink', name: 'Slink 🐕', defaultModel: 'sonnet', role: 'Trading Monitor', engine: 'cron' },
 ];
