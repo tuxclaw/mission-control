@@ -419,6 +419,24 @@ function persistChatSessionId(sessionId: string) {
   saveSystemDb();
 }
 
+function formatExportDate(date = new Date()): string {
+  return date.toISOString().slice(0, 10);
+}
+
+function formatIsoTimestamp(value: number): string {
+  return new Date(value).toISOString();
+}
+
+function escapeCsv(value: string): string {
+  return `"${value.replace(/"/g, '""')}"`;
+}
+
+function roleLabel(role: string): string {
+  if (role === 'user') return 'User';
+  if (role === 'agent') return 'Andy';
+  return role;
+}
+
 app.get('/api/chat/session', (_req, res) => {
   res.json({ sessionId: chatSessionId });
 });
@@ -483,6 +501,50 @@ app.get('/api/chat/history', (req, res) => {
     : [];
 
   res.json({ messages });
+});
+
+app.get('/api/chat/export', (req, res) => {
+  const formatRaw = typeof req.query.format === 'string' ? req.query.format.toLowerCase() : 'md';
+  const format = formatRaw === 'csv' ? 'csv' : 'md';
+
+  const messages = systemDb
+    ? (() => {
+      const result = systemDb.exec('SELECT role, content, timestamp FROM chat_messages ORDER BY timestamp ASC');
+      return result.length > 0
+        ? result[0].values.map((row) => ({
+          role: row[0] as string,
+          content: row[1] as string,
+          timestamp: row[2] as number,
+        }))
+        : [];
+    })()
+    : [];
+
+  const exportDate = formatExportDate();
+
+  if (format === 'csv') {
+    const header = 'timestamp,role,content';
+    const rows = messages.map((msg) => {
+      const timestamp = formatIsoTimestamp(msg.timestamp);
+      return [escapeCsv(timestamp), escapeCsv(msg.role), escapeCsv(msg.content)].join(',');
+    });
+    const body = [header, ...rows].join('\n');
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', `attachment; filename=chat-export-${exportDate}.csv`);
+    res.send(body);
+    return;
+  }
+
+  const lines: string[] = [];
+  for (const msg of messages) {
+    lines.push(`### [${formatIsoTimestamp(msg.timestamp)}] **${roleLabel(msg.role)}**`);
+    lines.push(msg.content ?? '');
+    lines.push('');
+  }
+  const body = lines.join('\n');
+  res.setHeader('Content-Type', 'text/markdown');
+  res.setHeader('Content-Disposition', `attachment; filename=chat-export-${exportDate}.md`);
+  res.send(body);
 });
 
 app.post('/api/chat/messages', (req, res) => {

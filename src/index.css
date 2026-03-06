@@ -942,6 +942,43 @@ body {
   margin-left: auto;
 }
 
+.chat-export {
+  position: relative;
+}
+
+.chat-export__menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  min-width: 180px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--bg-surface);
+  box-shadow: 0 14px 28px rgba(0, 0, 0, 0.35);
+  z-index: 5;
+}
+
+.chat-export__item {
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-primary);
+  text-align: left;
+  padding: 8px 10px;
+  border-radius: 10px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background var(--transition-fast), border-color var(--transition-fast);
+}
+
+.chat-export__item:hover {
+  background: var(--bg-secondary);
+  border-color: var(--border);
+}
+
 /* === CHAT ERROR === */
 .chat-error {
   background: rgba(239, 68, 68, 0.1);

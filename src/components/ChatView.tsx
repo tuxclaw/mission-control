@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { Bot, Copy, Plus, Send, Smile, Trash2, User } from 'lucide-react';
+import { Bot, Copy, Download, Plus, Send, Smile, Trash2, User } from 'lucide-react';
 import { ChatMarkdown } from './ChatMarkdown';
 
 interface ChatMsg {
@@ -58,6 +58,7 @@ export function ChatView() {
   const [emojiPickerOpen, setEmojiPickerOpen] = useState(false);
   const [emojiCategory, setEmojiCategory] = useState<(typeof EMOJI_CATEGORIES)[number]['key']>('smileys');
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [exportOpen, setExportOpen] = useState(false);
 
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimerRef = useRef<number | null>(null);
@@ -68,6 +69,8 @@ export function ChatView() {
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const emojiPickerRef = useRef<HTMLDivElement | null>(null);
   const emojiButtonRef = useRef<HTMLButtonElement | null>(null);
+  const exportMenuRef = useRef<HTMLDivElement | null>(null);
+  const exportButtonRef = useRef<HTMLButtonElement | null>(null);
   const copyTimeoutRef = useRef<number | null>(null);
 
   const setStreaming = useCallback((id: string | null) => {
@@ -304,6 +307,25 @@ export function ChatView() {
     };
   }, [emojiPickerOpen]);
 
+  useEffect(() => {
+    if (!exportOpen) return;
+
+    const handleOutsideClick = (event: MouseEvent | TouchEvent) => {
+      const target = event.target as Node | null;
+      if (!target) return;
+      if (exportMenuRef.current?.contains(target)) return;
+      if (exportButtonRef.current?.contains(target)) return;
+      setExportOpen(false);
+    };
+
+    document.addEventListener('mousedown', handleOutsideClick);
+    document.addEventListener('touchstart', handleOutsideClick);
+    return () => {
+      document.removeEventListener('mousedown', handleOutsideClick);
+      document.removeEventListener('touchstart', handleOutsideClick);
+    };
+  }, [exportOpen]);
+
   const insertEmoji = (emoji: string) => {
     const inputEl = inputRef.current;
     if (!inputEl) {
@@ -397,6 +419,35 @@ export function ChatView() {
       ? 'chat-connection-dot--reconnecting'
       : 'chat-connection-dot--disconnected';
   const activeEmojiSet = EMOJI_CATEGORIES.find(category => category.key === emojiCategory) ?? EMOJI_CATEGORIES[0];
+  const hasMessages = messages.length > 0;
+
+  useEffect(() => {
+    if (!hasMessages) {
+      setExportOpen(false);
+    }
+  }, [hasMessages]);
+
+  const triggerExport = (format: 'csv' | 'md') => {
+    setExportOpen(false);
+    fetch(`/api/chat/export?format=${format}`)
+      .then(async res => {
+        const blob = await res.blob();
+        const disposition = res.headers.get('content-disposition') ?? '';
+        const match = disposition.match(/filename=([^;]+)/i);
+        const filename = match
+          ? match[1].replace(/^"+|"+$/g, '')
+          : `chat-export-${new Date().toISOString().slice(0, 10)}.${format}`;
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        window.URL.revokeObjectURL(url);
+      })
+      .catch(() => {});
+  };
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0, flex: 1 }}>
@@ -446,6 +497,42 @@ export function ChatView() {
               <Plus size={14} />
               New
             </button>
+            {hasMessages && (
+              <div className="chat-export">
+                <button
+                  ref={exportButtonRef}
+                  type="button"
+                  onClick={() => setExportOpen(open => !open)}
+                  aria-label="Export chat history"
+                  title="Export chat history"
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    border: '1px solid var(--border)',
+                    background: 'transparent',
+                    color: 'inherit',
+                    padding: '4px 8px',
+                    borderRadius: 8,
+                    fontSize: 12,
+                    cursor: 'pointer',
+                  }}
+                >
+                  <Download size={14} />
+                  Export
+                </button>
+                {exportOpen && (
+                  <div className="chat-export__menu" ref={exportMenuRef} role="menu" aria-label="Export options">
+                    <button type="button" className="chat-export__item" onClick={() => triggerExport('csv')} role="menuitem">
+                      Export as CSV
+                    </button>
+                    <button type="button" className="chat-export__item" onClick={() => triggerExport('md')} role="menuitem">
+                      Export as Markdown
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
             <button
               type="button"
               onClick={() => {
