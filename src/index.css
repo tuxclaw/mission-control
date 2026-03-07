@@ -939,6 +939,11 @@ body {
   50% { box-shadow: 0 0 0 8px color-mix(in srgb, var(--accent) 55%, transparent); }
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .chat-avatar--thinking,
+  .chat-avatar--streaming { animation: none; }
+}
+
 /* === CHAT SESSION BAR === */
 .chat-session-bar {
   background: var(--bg-secondary);
