@@ -446,7 +446,7 @@ app.post('/api/chat/new-session', async (_req, res) => {
     const { execFile } = await import('child_process');
     const { promisify } = await import('util');
     const execFileAsync = promisify(execFile);
-    await execFileAsync('openclaw', ['agent', '--json', '-m', '/new'], { timeout: 15000 });
+    await execFileAsync('openclaw', ['agent', '--json', '--session-id', 'main', '-m', '/new'], { timeout: 15000 });
     res.json({ ok: true });
   } catch {
     res.json({ ok: true });
@@ -463,7 +463,7 @@ app.post('/api/chat', async (req, res) => {
 
     const { stdout } = await execFileAsync(
       'openclaw',
-      ['agent', '--json', '-m', message],
+      ['agent', '--json', '--session-id', 'main', '-m', message],
       { timeout: 60000 },
     );
 
@@ -693,7 +693,7 @@ wss.on('connection', (ws) => {
     try {
       const { spawn } = await import('child_process');
       const child = spawn('openclaw', [
-        'agent', '--json', '-m', message,
+        'agent', '--json', '--session-id', 'main', '-m', message,
       ], { timeout: 120000 });
 
       let stdout = '';
