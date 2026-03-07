@@ -921,6 +921,24 @@ body {
   50% { border-color: var(--accent); }
 }
 
+.chat-avatar--thinking {
+  animation: chatAvatarThinkingPulse 1.5s ease-in-out infinite;
+}
+
+.chat-avatar--streaming {
+  animation: chatAvatarStreamingPulse 1.5s ease-in-out infinite;
+}
+
+@keyframes chatAvatarThinkingPulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.1); }
+  50% { box-shadow: 0 0 0 8px rgba(239, 68, 68, 0.4); }
+}
+
+@keyframes chatAvatarStreamingPulse {
+  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 25%, transparent); }
+  50% { box-shadow: 0 0 0 8px color-mix(in srgb, var(--accent) 55%, transparent); }
+}
+
 /* === CHAT SESSION BAR === */
 .chat-session-bar {
   background: var(--bg-secondary);

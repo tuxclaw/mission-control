@@ -603,7 +603,7 @@ export function ChatView() {
               }}
             >
               <div
-                className={`chat-avatar ${msg.role === 'agent' ? 'chat-avatar--agent' : 'chat-avatar--user'}`}
+                className={`chat-avatar ${msg.role === 'agent' ? 'chat-avatar--agent' : 'chat-avatar--user'} ${msg.role === 'agent' && msg.streaming ? 'chat-avatar--streaming' : ''}`}
                 style={{
                   width: 32,
                   height: 32,
@@ -653,7 +653,7 @@ export function ChatView() {
         {sending && streamingId === null && (
           <div className="chat-bubble" style={{ display: 'flex', gap: 8, alignSelf: 'flex-start' }}>
             <div
-              className="chat-avatar chat-avatar--agent"
+              className="chat-avatar chat-avatar--agent chat-avatar--thinking"
               style={{
                 width: 32,
                 height: 32,
