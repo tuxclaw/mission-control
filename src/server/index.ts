@@ -441,10 +441,16 @@ app.get('/api/chat/session', (_req, res) => {
   res.json({ sessionId: chatSessionId });
 });
 
-app.post('/api/chat/new-session', (_req, res) => {
-  chatSessionId = `ao-chat-${Date.now()}`;
-  persistChatSessionId(chatSessionId);
-  res.json({ ok: true, sessionId: chatSessionId });
+app.post('/api/chat/new-session', async (_req, res) => {
+  try {
+    const { execFile } = await import('child_process');
+    const { promisify } = await import('util');
+    const execFileAsync = promisify(execFile);
+    await execFileAsync('openclaw', ['agent', '--json', '-m', '/new'], { timeout: 15000 });
+    res.json({ ok: true });
+  } catch {
+    res.json({ ok: true });
+  }
 });
 
 app.post('/api/chat', async (req, res) => {
