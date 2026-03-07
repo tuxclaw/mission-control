@@ -353,6 +353,7 @@ class GatewayClient extends EventEmitter {
 
   async send(message: string, handlers?: GatewayStreamHandlers): Promise<GatewayRunHandle> {
     const payload = await this.request('chat.send', {
+      sessionKey: 'main',
       message,
       deliver: false,
       idempotencyKey: crypto.randomUUID(),
@@ -387,12 +388,12 @@ class GatewayClient extends EventEmitter {
   }
 
   async getHistory(limit: number): Promise<unknown> {
-    return this.request('chat.history', { limit });
+    return this.request('chat.history', { sessionKey: 'main', limit });
   }
 
   async abort(): Promise<void> {
     if (!this.connected || !this.ws || this.ws.readyState !== WebSocket.OPEN) return;
-    await this.request('chat.abort', {});
+    await this.request('chat.abort', { sessionKey: 'main' });
   }
 }
 
