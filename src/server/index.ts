@@ -3,7 +3,6 @@ import cors from 'cors';
 import { readFile, readdir, writeFile, mkdir } from 'node:fs/promises';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { exec, execFile } from 'node:child_process';
-import { EventEmitter } from 'node:events';
 import { promisify } from 'node:util';
 import { dirname, join } from 'node:path';
 import { createServer } from 'node:http';
@@ -26,9 +25,6 @@ app.use(express.json());
 // ---- Gateway proxy (avoids CORS) ----
 const GATEWAY_URL = process.env.VITE_GATEWAY_URL ?? 'http://100.90.181.128:18789';
 const GATEWAY_TOKEN = process.env.VITE_GATEWAY_TOKEN ?? '';
-const GATEWAY_WS_URL = 'ws://127.0.0.1:18789/';
-const GATEWAY_WS_TOKEN = process.env.OPENCLAW_GATEWAY_TOKEN
-  ?? '63134d5e30a90ced59ba7a5b7f8d92b5031cb0e93d50f516';
 
 function gatewayHeaders(extra?: Record<string, string>) {
   return {
@@ -37,378 +33,274 @@ function gatewayHeaders(extra?: Record<string, string>) {
   };
 }
 
+function safeJsonParse(text: string): Record<string, unknown> | null {
+  try {
+    const parsed = JSON.parse(text) as Record<string, unknown>;
+    return parsed && typeof parsed === 'object' ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function extractGatewayText(payload: Record<string, unknown>): string | null {
+  const content =
+    (payload.response as string) ??
+    (payload.message as string) ??
+    (payload.text as string) ??
+    (payload.content as string);
+  return typeof content === 'string' ? content : null;
+}
+
+function truncateStdout(stdout: string, maxLength = 500): string {
+  if (stdout.length <= maxLength) return stdout;
+  return `${stdout.slice(0, maxLength)}...`;
+}
+
+function logAgentParseFallback(stdout: string, reason: string) {
+  const trimmed = stdout.trim();
+  if (!trimmed) return;
+  console.error(`AO chat response parse fallback (${reason}). Raw stdout (truncated):`, truncateStdout(trimmed));
+}
+
+function findFallbackString(value: unknown): string | null {
+  const stack: Array<{ value: unknown; key?: string }> = [{ value }];
+  const seen = new Set<unknown>();
+  const strings: string[] = [];
+  const contentKeyStrings: string[] = [];
+  const contentKeys = new Set(['text', 'content', 'message', 'output', 'response']);
+
+  while (stack.length > 0) {
+    const current = stack.pop();
+    if (!current) continue;
+    const { value: currentValue, key } = current;
+    if (typeof currentValue === 'string') {
+      const trimmed = currentValue.trim();
+      if (trimmed) {
+        strings.push(trimmed);
+        if (key && contentKeys.has(key)) {
+          contentKeyStrings.push(trimmed);
+        }
+      }
+      continue;
+    }
+    if (typeof currentValue !== 'object') continue;
+    if (seen.has(currentValue)) continue;
+    seen.add(currentValue);
+
+    if (Array.isArray(currentValue)) {
+      for (const item of currentValue) stack.push({ value: item });
+    } else {
+      for (const [childKey, item] of Object.entries(currentValue as Record<string, unknown>)) {
+        stack.push({ value: item, key: childKey });
+      }
+    }
+  }
+
+  if (strings.length === 0) return null;
+  const contentCandidates = contentKeyStrings.filter((str) => str.length >= 16);
+  if (contentCandidates.length > 0) {
+    return contentCandidates.sort((a, b) => b.length - a.length)[0] ?? null;
+  }
+  const longStrings = strings.filter((str) => str.length >= 16);
+  const candidates = longStrings.length > 0 ? longStrings : strings;
+  return candidates.sort((a, b) => b.length - a.length)[0] ?? null;
+}
+
+function parseAgentResponse(stdout: string): { content: string; silent: boolean } {
+  let content = '(no response)';
+  let silent = false;
+
+  const raw = stdout ?? '';
+  let parsed: unknown = null;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    parsed = null;
+  }
+
+  if (parsed && typeof parsed === 'object') {
+    const record = parsed as Record<string, unknown>;
+    const result = record.result as Record<string, unknown> | undefined;
+    const payloads = result?.payloads as Array<Record<string, unknown>> | undefined;
+    if (Array.isArray(payloads) && payloads.length === 0) {
+      content = '';
+      silent = true;
+    } else if (Array.isArray(payloads)) {
+      const texts = payloads
+        .map((payload) => (typeof payload.text === 'string' ? payload.text : null))
+        .filter((text): text is string => text !== null);
+      if (texts.length > 0) {
+        content = texts.join('\n\n');
+      } else if (payloads.some((payload) => typeof payload.mediaUrl === 'string' && payload.mediaUrl)) {
+        content = '(media attachment)';
+      } else if (typeof record.text === 'string') {
+        content = record.text;
+      } else if (typeof record.content === 'string') {
+        content = record.content;
+      } else if (typeof result?.text === 'string') {
+        content = result.text as string;
+      } else {
+        logAgentParseFallback(raw, 'no matching structured fields');
+        const fallback = findFallbackString(parsed);
+        if (fallback) {
+          content = fallback;
+        } else if (raw.trim()) {
+          content = raw.trim();
+        }
+      }
+    } else if (typeof record.text === 'string') {
+      content = record.text;
+    } else if (typeof record.content === 'string') {
+      content = record.content;
+    } else if (typeof result?.text === 'string') {
+      content = result.text as string;
+    } else {
+      logAgentParseFallback(raw, 'no matching structured fields');
+      const fallback = findFallbackString(parsed);
+      if (fallback) {
+        content = fallback;
+      } else if (raw.trim()) {
+        content = raw.trim();
+      }
+    }
+  } else if (parsed !== null && typeof parsed === 'string') {
+    content = parsed;
+  } else if (parsed !== null) {
+    logAgentParseFallback(raw, 'json without string payload');
+    const fallback = findFallbackString(parsed);
+    if (fallback) {
+      content = fallback;
+    } else if (raw.trim()) {
+      content = raw.trim();
+    }
+  } else if (raw.trim()) {
+    logAgentParseFallback(raw, 'invalid json');
+    content = raw.trim();
+  }
+
+  if (content === 'NO_REPLY') {
+    content = '';
+    silent = true;
+  } else if (content.trim() === '') {
+    silent = true;
+  }
+
+  return { content, silent };
+}
+
+function extractUsage(payload: Record<string, unknown>): Record<string, number> | undefined {
+  if (!payload.usage || typeof payload.usage !== 'object') return undefined;
+  return payload.usage as Record<string, number>;
+}
+
+function extractToken(payload: Record<string, unknown>): string | null {
+  const direct =
+    (payload.token as string) ??
+    (payload.text as string) ??
+    (payload.content as string) ??
+    (payload.delta as string);
+  if (typeof direct === 'string' && direct.length > 0) return direct;
+
+  const choices = payload.choices as Array<Record<string, unknown>> | undefined;
+  if (choices && choices.length > 0) {
+    const delta = choices[0]?.delta as Record<string, unknown> | undefined;
+    const deltaText = (delta?.content as string) ?? (choices[0]?.text as string);
+    if (typeof deltaText === 'string' && deltaText.length > 0) return deltaText;
+  }
+
+  return null;
+}
+
+function isEventStream(contentType: string): boolean {
+  return contentType.includes('text/event-stream');
+}
+
+function isNdjson(contentType: string): boolean {
+  return contentType.includes('application/x-ndjson')
+    || contentType.includes('application/ndjson')
+    || contentType.includes('application/jsonl');
+}
+
 function sendWs(ws: WebSocket, payload: unknown) {
   if (ws.readyState !== WebSocket.OPEN) return;
   ws.send(JSON.stringify(payload));
 }
 
-type GatewayStreamHandlers = {
-  onToken?: (token: string) => void;
-  onMessage?: (content: string) => void;
-  onDone?: () => void;
-  onError?: (message: string) => void;
-};
+async function handleGatewayStream(ws: WebSocket, res: Response) {
+  const contentType = res.headers.get('content-type') ?? '';
+  const useSse = isEventStream(contentType);
+  const useNdjson = isNdjson(contentType);
 
-type GatewayRunHandle = {
-  runId: string;
-  done: Promise<string>;
-};
-
-type GatewayRequest = {
-  type: 'req';
-  id: string;
-  method: string;
-  params?: Record<string, unknown>;
-};
-
-type GatewayResponse = {
-  type: 'res';
-  id: string;
-  ok: boolean;
-  payload?: Record<string, unknown>;
-  error?: { code?: string; message?: string };
-};
-
-type GatewayEvent = {
-  type: 'event';
-  event: string;
-  payload: Record<string, unknown>;
-  seq?: number;
-};
-
-type GatewayMessage = GatewayResponse | GatewayEvent;
-
-type GatewayRunState = {
-  runId: string;
-  content: string;
-  handlers?: GatewayStreamHandlers;
-  resolve: (content: string) => void;
-  reject: (err: Error) => void;
-  timeout: NodeJS.Timeout | null;
-  done: boolean;
-};
-
-class GatewayClient extends EventEmitter {
-  private ws: WebSocket | null = null;
-  private connectPromise: Promise<void> | null = null;
-  private connected = false;
-  private reconnectTimer: NodeJS.Timeout | null = null;
-  private reconnectAttempts = 0;
-  private pending = new Map<string, {
-    resolve: (payload: unknown) => void;
-    reject: (err: Error) => void;
-    timeout: NodeJS.Timeout | null;
-  }>();
-  private runs = new Map<string, GatewayRunState>();
-  private pendingConnectId: string | null = null;
-  private readonly maxReconnectDelayMs = 10000;
-  private readonly baseReconnectDelayMs = 500;
-
-  async ensureConnected(): Promise<void> {
-    if (this.connected && this.ws?.readyState === WebSocket.OPEN) return;
-    if (this.connectPromise) return this.connectPromise;
-    this.connectPromise = this.connect();
-    return this.connectPromise;
+  if (!res.body || (!useSse && !useNdjson)) {
+    const text = await res.text();
+    const json = safeJsonParse(text);
+    if (json) {
+      const content = extractGatewayText(json) ?? text;
+      sendWs(ws, { type: 'message', content, usage: extractUsage(json) });
+    } else {
+      sendWs(ws, { type: 'message', content: text });
+    }
+    sendWs(ws, { type: 'done' });
+    return;
   }
 
-  private async connect(): Promise<void> {
-    if (this.ws && (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING)) {
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+
+  const handlePayload = (payloadText: string) => {
+    const trimmed = payloadText.trim();
+    if (!trimmed) return;
+    if (trimmed === '[DONE]') {
+      sendWs(ws, { type: 'done' });
       return;
     }
-
-    await new Promise<void>((resolve, reject) => {
-      let settled = false;
-      const ws = new WebSocket(GATEWAY_WS_URL);
-      this.ws = ws;
-      this.connected = false;
-      this.pendingConnectId = null;
-
-      ws.on('open', () => {
-        // wait for connect challenge -> connect response
-      });
-
-      ws.on('message', (raw) => {
-        this.handleMessage(raw.toString());
-        if (this.connected && !settled) {
-          settled = true;
-          resolve();
-        }
-      });
-
-      ws.on('error', (err) => {
-        if (!settled) {
-          settled = true;
-          reject(err instanceof Error ? err : new Error('Gateway WebSocket error'));
-        }
-        this.handleDisconnect();
-      });
-
-      ws.on('close', () => {
-        if (!this.connected && !settled) {
-          settled = true;
-          reject(new Error('Gateway WebSocket closed before connect'));
-        }
-        this.handleDisconnect();
-      });
-    }).finally(() => {
-      this.connectPromise = null;
-    });
-  }
-
-  private handleDisconnect() {
-    this.connected = false;
-    this.pendingConnectId = null;
-    for (const [id, pending] of this.pending.entries()) {
-      pending.timeout && clearTimeout(pending.timeout);
-      pending.reject(new Error('Gateway disconnected'));
-      this.pending.delete(id);
-    }
-    for (const [runId, run] of this.runs.entries()) {
-      run.timeout && clearTimeout(run.timeout);
-      if (!run.done) {
-        run.done = true;
-        run.reject(new Error('Gateway disconnected'));
-        run.handlers?.onError?.('Gateway disconnected');
-        this.emit('error', { runId, message: 'Gateway disconnected' });
-      }
-      this.runs.delete(runId);
-    }
-    this.scheduleReconnect();
-  }
-
-  private scheduleReconnect() {
-    if (this.reconnectTimer) return;
-    const attempt = this.reconnectAttempts + 1;
-    this.reconnectAttempts = attempt;
-    const delay = Math.min(this.maxReconnectDelayMs, this.baseReconnectDelayMs * Math.pow(2, attempt - 1));
-    this.reconnectTimer = setTimeout(() => {
-      this.reconnectTimer = null;
-      this.ensureConnected().catch(() => {
-        // keep retrying
-      });
-    }, delay);
-  }
-
-  private sendRaw(message: GatewayRequest) {
-    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
-      throw new Error('Gateway not connected');
-    }
-    this.ws.send(JSON.stringify(message));
-  }
-
-  private async request(method: string, params?: Record<string, unknown>): Promise<unknown> {
-    await this.ensureConnected();
-    const id = crypto.randomUUID();
-    const payload = params ?? {};
-    const request: GatewayRequest = { type: 'req', id, method, params: payload };
-    return new Promise((resolve, reject) => {
-      const timeout = setTimeout(() => {
-        this.pending.delete(id);
-        reject(new Error(`Gateway request timeout: ${method}`));
-      }, 20000);
-      this.pending.set(id, { resolve, reject, timeout });
-      try {
-        this.sendRaw(request);
-      } catch (err) {
-        clearTimeout(timeout);
-        this.pending.delete(id);
-        reject(err instanceof Error ? err : new Error('Gateway send failed'));
-      }
-    });
-  }
-
-  private handleMessage(raw: string) {
-    let parsed: GatewayMessage | null = null;
-    try {
-      parsed = JSON.parse(raw) as GatewayMessage;
-    } catch {
+    const payload = safeJsonParse(trimmed);
+    if (payload) {
+      const token = extractToken(payload) ?? extractGatewayText(payload);
+      if (token) sendWs(ws, { type: 'token', token, usage: extractUsage(payload) });
       return;
     }
-    if (!parsed || typeof parsed !== 'object') return;
+    sendWs(ws, { type: 'token', token: trimmed });
+  };
 
-    if (parsed.type === 'event') {
-      if (parsed.event === 'connect.challenge') {
-        this.respondToChallenge(parsed.payload);
-        return;
-      }
-      if (parsed.event === 'chat') {
-        this.handleChatEvent(parsed.payload);
-        return;
-      }
-      return;
-    }
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
 
-    if (parsed.type === 'res') {
-      if (this.pendingConnectId && parsed.id === this.pendingConnectId) {
-        if (parsed.ok) {
-          this.connected = true;
-          this.reconnectAttempts = 0;
-          this.pendingConnectId = null;
-        } else {
-          const errMsg = parsed.error?.message ?? 'Gateway connect failed';
-          this.connected = false;
-          this.pendingConnectId = null;
-          this.ws?.close();
-          this.handleDisconnect();
-          this.emit('error', { message: errMsg });
+    if (useSse) {
+      let idx = buffer.indexOf('\n\n');
+      while (idx !== -1) {
+        const rawEvent = buffer.slice(0, idx);
+        buffer = buffer.slice(idx + 2);
+        const dataLines = rawEvent
+          .split('\n')
+          .map((line) => line.trim())
+          .filter((line) => line.startsWith('data:'))
+          .map((line) => line.replace(/^data:\s?/, ''));
+        if (dataLines.length > 0) {
+          handlePayload(dataLines.join('\n'));
         }
-        return;
+        idx = buffer.indexOf('\n\n');
       }
-
-      const pending = this.pending.get(parsed.id);
-      if (!pending) return;
-      pending.timeout && clearTimeout(pending.timeout);
-      this.pending.delete(parsed.id);
-      if (parsed.ok) {
-        pending.resolve(parsed.payload ?? {});
-      } else {
-        const errMsg = parsed.error?.message ?? 'Gateway request failed';
-        pending.reject(new Error(errMsg));
+    } else if (useNdjson) {
+      let lineIdx = buffer.indexOf('\n');
+      while (lineIdx !== -1) {
+        const line = buffer.slice(0, lineIdx);
+        buffer = buffer.slice(lineIdx + 1);
+        handlePayload(line);
+        lineIdx = buffer.indexOf('\n');
       }
     }
   }
 
-  private respondToChallenge(_payload: Record<string, unknown>) {
-    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
-    if (this.pendingConnectId) return;
-    const id = crypto.randomUUID();
-    this.pendingConnectId = id;
-    const request: GatewayRequest = {
-      type: 'req',
-      id,
-      method: 'connect',
-      params: {
-        auth: { token: GATEWAY_WS_TOKEN },
-        clientName: 'andys-overview',
-        mode: 'webchat',
-      },
-    };
-    this.ws.send(JSON.stringify(request));
+  if (buffer.trim()) {
+    handlePayload(buffer);
   }
 
-  private handleChatEvent(payload: Record<string, unknown>) {
-    this.emit('chat', payload);
-    const runId = typeof payload.runId === 'string' ? payload.runId : null;
-    if (!runId) return;
-    const run = this.runs.get(runId);
-    if (!run || run.done) return;
-
-    const status = typeof payload.status === 'string' ? payload.status.toLowerCase() : null;
-    const isDone = payload.done === true || payload.final === true || payload.isFinal === true
-      || (status !== null && ['done', 'completed', 'complete', 'finished', 'success', 'succeeded'].includes(status));
-    const isError = status !== null && ['error', 'failed', 'aborted', 'cancelled', 'canceled'].includes(status);
-
-    const text = extractChatText(payload);
-    const isDelta = typeof payload.delta === 'string'
-      || typeof payload.token === 'string'
-      || typeof payload.chunk === 'string';
-
-    if (text) {
-      if (isDelta) {
-        run.content += text;
-        run.handlers?.onToken?.(text);
-        this.emit('token', { runId, token: text });
-      } else if (run.content && text.startsWith(run.content)) {
-        const delta = text.slice(run.content.length);
-        if (delta) {
-          run.handlers?.onToken?.(delta);
-          this.emit('token', { runId, token: delta });
-        }
-        run.content = text;
-      } else if (!run.content) {
-        run.content = text;
-      } else if (isDone) {
-        run.content = text;
-      }
-    }
-
-    if (isError) {
-      if (!run.done) {
-        run.done = true;
-        run.timeout && clearTimeout(run.timeout);
-        const message = typeof payload.error === 'string'
-          ? payload.error
-          : (payload.error as { message?: string } | undefined)?.message ?? 'Gateway chat error';
-        run.reject(new Error(message));
-        run.handlers?.onError?.(message);
-        this.emit('error', { runId, message });
-        this.runs.delete(runId);
-      }
-      return;
-    }
-
-    if (isDone) {
-      if (!run.done) {
-        run.done = true;
-        run.timeout && clearTimeout(run.timeout);
-        run.handlers?.onMessage?.(run.content);
-        run.handlers?.onDone?.();
-        this.emit('message', { runId, content: run.content });
-        this.emit('done', { runId });
-        run.resolve(run.content);
-        this.runs.delete(runId);
-      }
-    }
-  }
-
-  async send(message: string, handlers?: GatewayStreamHandlers): Promise<GatewayRunHandle> {
-    const payload = await this.request('chat.send', {
-      sessionKey: 'main',
-      message,
-      deliver: false,
-      idempotencyKey: crypto.randomUUID(),
-    }) as Record<string, unknown>;
-    const runId = typeof payload.runId === 'string' ? payload.runId : crypto.randomUUID();
-    let resolve: (content: string) => void = () => {};
-    let reject: (err: Error) => void = () => {};
-    const done = new Promise<string>((res, rej) => {
-      resolve = res;
-      reject = rej;
-    });
-    const timeout = setTimeout(() => {
-      if (!this.runs.has(runId)) return;
-      const run = this.runs.get(runId);
-      if (!run || run.done) return;
-      run.done = true;
-      run.handlers?.onError?.('Gateway chat timeout');
-      this.emit('error', { runId, message: 'Gateway chat timeout' });
-      run.reject(new Error('Gateway chat timeout'));
-      this.runs.delete(runId);
-    }, 120000);
-    this.runs.set(runId, {
-      runId,
-      content: '',
-      handlers,
-      resolve,
-      reject,
-      timeout,
-      done: false,
-    });
-    return { runId, done };
-  }
-
-  async getHistory(limit: number): Promise<unknown> {
-    return this.request('chat.history', { sessionKey: 'main', limit });
-  }
-
-  async abort(): Promise<void> {
-    if (!this.connected || !this.ws || this.ws.readyState !== WebSocket.OPEN) return;
-    await this.request('chat.abort', { sessionKey: 'main' });
-  }
+  sendWs(ws, { type: 'done' });
 }
-
-function extractChatText(payload: Record<string, unknown>): string | null {
-  const direct = (payload.text as string)
-    ?? (payload.content as string)
-    ?? (payload.message as string)
-    ?? (payload.response as string)
-    ?? (payload.delta as string)
-    ?? (payload.token as string)
-    ?? (payload.chunk as string);
-  return typeof direct === 'string' && direct.length > 0 ? direct : null;
-}
-
-const gatewayClient = new GatewayClient();
 
 function extractModelName(model?: string): string {
   if (!model) return 'unknown';
@@ -563,9 +455,14 @@ app.post('/api/chat', async (req, res) => {
       return;
     }
 
-    const run = await gatewayClient.send(message);
-    const content = await run.done;
-    const silent = content.trim() === '';
+    const { stdout } = await execFileAsync(
+      'openclaw',
+      ['agent', '--json', '--session-id', chatSessionId, '-m', message],
+      { timeout: 60000 },
+    );
+
+    const { content, silent } = parseAgentResponse(stdout);
+
     res.json({ content, silent, usage: null });
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'Chat failed';
@@ -574,24 +471,36 @@ app.post('/api/chat', async (req, res) => {
 });
 
 app.get('/api/chat/history', (req, res) => {
+  if (!systemDb) {
+    res.json({ messages: [] });
+    return;
+  }
+
   const limitRaw = typeof req.query.limit === 'string' ? Number.parseInt(req.query.limit, 10) : 50;
   const limit = Number.isFinite(limitRaw) ? Math.min(200, Math.max(1, limitRaw)) : 50;
-  gatewayClient.getHistory(limit)
-    .then((payload) => {
-      if (!payload || typeof payload !== 'object') {
-        res.json({ messages: [] });
-        return;
-      }
-      if (Array.isArray(payload)) {
-        res.json({ messages: payload });
-        return;
-      }
-      res.json(payload);
-    })
-    .catch((err) => {
-      const msg = err instanceof Error ? err.message : 'Failed to load history';
-      res.status(502).json({ error: msg });
-    });
+  const beforeRaw = typeof req.query.before === 'string' ? Number.parseInt(req.query.before, 10) : null;
+  const before = Number.isFinite(beforeRaw) ? beforeRaw : null;
+
+  let sql = 'SELECT msg_id, role, content, timestamp FROM chat_messages';
+  const params: Array<string | number> = [];
+  if (before !== null) {
+    sql += ' WHERE timestamp < ?';
+    params.push(before);
+  }
+  sql += ' ORDER BY timestamp ASC LIMIT ?';
+  params.push(limit);
+
+  const result = systemDb.exec(sql, params);
+  const messages = result.length > 0
+    ? result[0].values.map((row) => ({
+      msg_id: row[0] as string,
+      role: row[1] as string,
+      content: row[2] as string,
+      timestamp: row[3] as number,
+    }))
+    : [];
+
+  res.json({ messages });
 });
 
 app.get('/api/chat/export', (req, res) => {
@@ -742,11 +651,11 @@ const wss = new WebSocketServer({ noServer: true });
 
 wss.on('connection', (ws) => {
   let inFlight = false;
+  let abortController: AbortController | null = null;
 
   ws.on('close', () => {
-    if (inFlight) {
-      gatewayClient.abort().catch(() => {});
-    }
+    abortController?.abort();
+    abortController = null;
   });
 
   ws.on('message', async (raw) => {
@@ -774,42 +683,53 @@ wss.on('connection', (ws) => {
     }
 
     inFlight = true;
-    let doneSent = false;
 
     try {
-      const markDone = () => {
-        if (doneSent) return;
-        doneSent = true;
-        sendWs(ws, { type: 'done' });
-      };
+      const { spawn } = await import('child_process');
+      const child = spawn('openclaw', [
+        'agent', '--json', '--session-id', chatSessionId, '-m', message,
+      ], { timeout: 120000 });
 
-      const run = await gatewayClient.send(message, {
-        onToken: (token) => {
-          sendWs(ws, { type: 'token', token });
-        },
-        onMessage: (content) => {
-          sendWs(ws, { type: 'message', content });
-        },
-        onDone: () => {
-          markDone();
-        },
-        onError: (errMessage) => {
-          sendWs(ws, { type: 'error', message: errMessage });
-          markDone();
-        },
+      let stdout = '';
+      let stderr = '';
+
+      child.stdout.on('data', (chunk: Buffer) => {
+        stdout += chunk.toString();
       });
-      await run.done;
+
+      child.stderr.on('data', (chunk: Buffer) => {
+        stderr += chunk.toString();
+      });
+
+      const onWsClose = () => { child.kill(); };
+      ws.on('close', onWsClose);
+
+      await new Promise<void>((resolve) => {
+        child.on('close', (code) => {
+          ws.removeListener('close', onWsClose);
+
+          if (code !== 0) {
+            sendWs(ws, { type: 'error', message: stderr.trim() || `Agent exited with code ${code}` });
+            sendWs(ws, { type: 'done' });
+            resolve();
+            return;
+          }
+
+          const { content, silent } = parseAgentResponse(stdout);
+
+          if (!silent) {
+            sendWs(ws, { type: 'message', content });
+          }
+          sendWs(ws, { type: 'done' });
+          resolve();
+        });
+      });
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'WebSocket proxy error';
       sendWs(ws, { type: 'error', message: msg });
-      if (!doneSent) {
-        sendWs(ws, { type: 'done' });
-      }
+      sendWs(ws, { type: 'done' });
     } finally {
       inFlight = false;
-      if (!doneSent) {
-        sendWs(ws, { type: 'done' });
-      }
     }
   });
 });
